@@ -47,6 +47,7 @@ router.get('/:messageId/:index', async (req, res) => {
     const p = path.join(info.source.local_path, fileRel);
     if (!fs.existsSync(p)) return res.status(404).end();
     const stat = fs.statSync(p);
+    res.type(mimeFor(fileName));
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     if (req.query.download) res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
@@ -67,6 +68,7 @@ router.get('/:messageId/:index', async (req, res) => {
 
   // WebDAV: pipe through, honoring Range for videos.
   try {
+    res.type(mimeFor(fileName));
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     if (req.query.download) res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);

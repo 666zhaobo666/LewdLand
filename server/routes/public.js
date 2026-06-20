@@ -7,7 +7,24 @@ const { safeJoin, mediaKind } = require('../util');
 const router = express.Router();
 
 router.get('/themes', (req, res) => {
-  const themes = db.prepare('SELECT id,name,cover,sort_order FROM themes ORDER BY sort_order, id').all();
+  const themes = db.prepare(`
+    SELECT
+      t.id,
+      t.name,
+      COALESCE(
+        t.cover,
+        (
+          SELECT m.thumb_path
+          FROM messages m
+          WHERE m.theme_id = t.id AND m.thumb_path IS NOT NULL
+          ORDER BY COALESCE(m.publish_date, '') DESC, m.id DESC
+          LIMIT 1
+        )
+      ) AS cover,
+      t.sort_order
+    FROM themes t
+    ORDER BY t.sort_order, t.id
+  `).all();
   for (const t of themes) {
     t.message_count = db.prepare('SELECT COUNT(*) c FROM messages WHERE theme_id=?').get(t.id).c;
   }

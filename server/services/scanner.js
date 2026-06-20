@@ -142,14 +142,16 @@ async function scanSource(source, opts) {
   opts = opts || {};
   const { onProgress, forceThumb = false, prune = true } = opts;
   const adapter = getAdapter(source);
-  onProgress && onProgress('start', `source #${source.id} (${source.type})`);
+  onProgress && onProgress('start', { source_id: source.id, source_type: source.type, label: source.label || '' });
   const dirs = await findMessageDirs(adapter, onProgress);
+  onProgress && onProgress('scan_done', { total: dirs.length });
 
   let inserted = 0, updated = 0, failed = 0;
   const scanned = new Set();
   for (let i = 0; i < dirs.length; i++) {
     const relDir = dirs[i];
     scanned.add(relDir);
+    onProgress && onProgress('progress', { current: i + 1, total: dirs.length, dir: relDir });
     try {
       const meta = JSON.parse(await adapter.readText(relDir + '/meta.json'));
       let readme = {};
@@ -161,12 +163,12 @@ async function scanSource(source, opts) {
       catch (e) { onProgress && onProgress('warn', `thumb failed: ${relDir} -> ${e.message}`); }
       const isUpdate = upsertMessage(source, relDir, meta, readme, mainFiles, commentFiles, thumbKey);
       if (isUpdate) updated++; else inserted++;
-      if (onProgress && (i % 10 === 0)) onProgress('progress', `${i + 1}/${dirs.length}`);
     } catch (e) {
       failed++;
       onProgress && onProgress('warn', `msg failed: ${relDir} -> ${e.message}`);
     }
   }
+  onProgress && onProgress('process_done', { inserted, updated, failed });
 
   let prunedCount = 0;
   if (prune && dirs.length > 0) {

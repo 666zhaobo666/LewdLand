@@ -112,6 +112,47 @@ router.post('/scan/source/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ---------- Scan with progress (SSE) ----------
+// GET /api/admin/scan/stream/theme/:id?force=1
+// GET /api/admin/scan/stream/source/:id?force=1
+// Server-Sent Events: pushes {type, ...} JSON lines so the UI can show a progress bar.
+function sseScan(res, runFn) {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+  res.write('\n');
+  const send = (obj) => { try { res.write(`data: ${JSON.stringify(obj)}\n\n`); } catch (_) {} };
+  const onProgress = (type, payload) => {
+    if (typeof payload === 'object') send({ type, ...payload });
+    else send({ type, message: String(payload) });
+  };
+  runFn(onProgress)
+    .then((results) => { send({ type: 'done', results }); })
+    .catch((e) => { send({ type: 'error', message: e.message }); })
+    .finally(() => { try { res.end(); } catch (_) {} });
+}
+
+router.get('/scan/stream/theme/:id', (req, res) => {
+  sseScan(res, (onProgress) => scanTheme(Number(req.params.id), {
+    forceThumb: req.query.force === '1' || req.query.force === 'true',
+    onProgress
+  }));
+});
+
+router.get('/scan/stream/source/:id', (req, res) => {
+  sseScan(res, async (onProgress) => {
+    const src = db.prepare('SELECT * FROM data_sources WHERE id=?').get(Number(req.params.id));
+    if (!src) throw new Error('source not found');
+    return [await scanSource(src, {
+      forceThumb: req.query.force === '1' || req.query.force === 'true',
+      onProgress
+    })];
+  });
+});
+
 // ---------- Test connection ----------
 router.post('/sources/test', async (req, res) => {
   const b = req.body || {};
