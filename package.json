@@ -1,0 +1,21 @@
+{
+  "name": "lewdland",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Data-driven local/WebDAV media library for Telegram channel dumps",
+  "type": "commonjs",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "build:client": "cd client && npm install && npm run build",
+    "client:dev": "cd client && npm run dev"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "sharp": "^0.33.5",
+    "webdav": "^5.8.0"
+  }
+}
