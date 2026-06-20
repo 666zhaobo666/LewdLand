@@ -117,3 +117,77 @@ npm run client:dev               # 前端 dev server (5173，代理 /api 到 300
 - `data/thumbs/<source_id>/<hash>.webp` — 封面缩略图
 
 可通过 `LEWDLAND_DATA` 环境变量指定其它数据目录。
+
+## Linux 部署(一键管理脚本)
+
+仓库根目录提供 `install.sh` 交互式管理脚本，支持安装、配置端口、启停/自启管理、更新、卸载。**配置与数据与代码分离**，更新时用户配置和数据完全保留。
+
+### 目录布局
+
+| 路径 | 用途 | git 更新是否影响 |
+|------|------|------------------|
+| `/opt/lewland` | 代码(git 仓库) | 是(代码更新) |
+| `/etc/lewland/lewland.env` | 用户配置(端口、数据目录、密钥) | 否(在仓库外) |
+| `/var/lib/lewland` | 数据(SQLite + 缩略图) | 否(在仓库外) |
+| `/etc/systemd/system/lewland.service` | systemd 服务 | 否 |
+
+### 使用
+
+```bash
+# 克隆后直接运行(root/sudo)
+git clone https://github.com/666zhaobo666/LewdLand.git
+cd LewdLand
+sudo bash install.sh
+```
+
+**未安装时**菜单只有:
+
+```
+1) 安装
+0) 退出
+```
+
+**已安装时**菜单:
+
+```
+端口: 3000  状态: 运行中  自启: 开
+----------------------------------------
+1) 配置端口        5) 停止服务
+2) 启动服务        6) 更新
+3) 重启服务        7) 卸载
+4) 服务自启动管理  0) 退出
+```
+
+### 安装脚本做了什么
+
+1. 检测包管理器(apt/dnf/yum/pacman/zypper)，安装 git、curl、编译工具
+2. 安装 Node.js 22(已装且版本够则跳过；apt/dnf/yum 走 NodeSource，其它用官方二进制)
+3. 克隆仓库到 `/opt/lewland`
+4. `npm install` 后端依赖 + 构建前端
+5. 生成 `/etc/lewland/lewland.env`(随机 SESSION_SECRET，默认端口 3000，默认管理员密码 admin)
+6. 创建 `lewland` 系统用户
+7. 写入并 reload systemd 服务单元
+
+### 更新机制(用户配置不变)
+
+选择「更新」时：
+
+1. `git fetch --all` 拉取远程
+2. 对比本地与 `origin/main` 的 commit hash，相同则提示已是最新
+3. `git reset --hard origin/main` + `git clean -fd` 同步代码(只影响 `/opt/lewland` 内 git 跟踪文件)
+4. 重新 `npm install` + 构建前端
+5. 若服务正在运行则自动重启
+
+**`/etc/lewland/lewland.env` 和 `/var/lib/lewland` 不在 git 仓库内，更新绝不覆盖。** 端口、数据、已扫描的索引、缩略图全部保留。
+
+### 卸载
+
+卸载会删除服务、代码、配置、数据(需输入 `yes` 确认)。如需保留数据，卸载前先备份 `/var/lib/lewland`。
+
+### 常用命令
+
+```bash
+sudo systemctl status lewland       # 查看状态
+sudo systemctl restart lewland      # 重启
+sudo journalctl -u lewland -f       # 查看日志
+```
