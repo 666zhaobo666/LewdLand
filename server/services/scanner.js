@@ -76,6 +76,33 @@ function getAdapter(source) {
   throw new Error('unknown source type: ' + source.type);
 }
 
+async function normalizeMainFiles(adapter, relDir, mainFiles) {
+  if (!Array.isArray(mainFiles)) return [];
+  const normalized = [];
+  for (const file of mainFiles) {
+    if (!file || String(file).includes('/')) {
+      normalized.push(file);
+      continue;
+    }
+    const direct = relDir ? `${relDir}/${file}` : file;
+    try {
+      await adapter.size(direct);
+      normalized.push(file);
+      continue;
+    } catch (_) {
+      // Try main/ fallback.
+    }
+    const inMainDir = relDir ? `${relDir}/main/${file}` : `main/${file}`;
+    try {
+      await adapter.size(inMainDir);
+      normalized.push(`main/${file}`);
+    } catch (_) {
+      normalized.push(file);
+    }
+  }
+  return normalized;
+}
+
 // Recursively find folders that contain a meta.json (message folders).
 async function findMessageDirs(adapter, onProgress) {
   const found = [];
@@ -158,7 +185,8 @@ async function scanSource(source, opts) {
       const meta = JSON.parse(await adapter.readText(relDir + '/meta.json'));
       let readme = {};
       try { readme = parseReadme(await adapter.readText(relDir + '/README.md')); } catch (_) {}
-      const mainFiles = Array.isArray(meta.main_files) ? meta.main_files : [];
+      const rawMainFiles = Array.isArray(meta.main_files) ? meta.main_files : [];
+      const mainFiles = await normalizeMainFiles(adapter, relDir, rawMainFiles);
       const commentFiles = Array.isArray(meta.comment_files) ? meta.comment_files : [];
       let thumbKey = null;
       try { thumbKey = await ensureThumb(adapter, source.id, relDir, mainFiles, commentFiles, forceThumb); }

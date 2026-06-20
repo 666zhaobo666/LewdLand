@@ -40,11 +40,13 @@
     </div>
 
     <div v-else class="grid grid-cols-2 gap-4 lg:grid-cols-3">
-      <router-link
+      <button
         v-for="item in items"
         :key="item.id"
-        :to="`/message/${item.id}`"
-        class="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white transition hover:shadow-lg dark:border-neutral-800 dark:bg-neutral-900"
+        :id="cardDomId(item.id)"
+        type="button"
+        class="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition hover:shadow-lg dark:border-neutral-800 dark:bg-neutral-900"
+        @click="openMessage(item.id)"
       >
         <div class="relative aspect-[4/3] overflow-hidden bg-neutral-100 dark:bg-neutral-800">
           <img
@@ -73,7 +75,7 @@
           <div class="clamp-2 text-sm font-medium">{{ item.title || '(无标题)' }}</div>
           <div class="clamp-1 mt-1 text-[11px] text-neutral-400">{{ item.source_chat }}</div>
         </div>
-      </router-link>
+      </button>
     </div>
 
     <div v-if="totalPages > 1" class="mt-8 flex flex-wrap items-center justify-center gap-2">
@@ -113,12 +115,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+defineOptions({ name: 'theme' });
+
+import { computed, nextTick, onActivated, onDeactivated, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
 
 const route = useRoute();
+const router = useRouter();
 const themeId = computed(() => Number(route.params.id));
+const storageKey = computed(() => `theme-list:${themeId.value}`);
 
 const themeName = ref('');
 const items = ref([]);
@@ -128,8 +134,123 @@ const page = ref(1);
 const limit = ref(21);
 const q = ref('');
 const jumpInput = ref(1);
+const shouldRestoreScroll = ref(false);
+const initialized = ref(false);
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)));
+
+function parsePositive(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function cardDomId(id) {
+  return `theme-card-${themeId.value}-${id}`;
+}
+
+function currentThemeQuery(focus = null) {
+  return {
+    page: String(page.value),
+    limit: String(limit.value),
+    ...(q.value ? { q: q.value } : {}),
+    ...(focus ? { focus: String(focus) } : {})
+  };
+}
+
+function syncRouteQuery() {
+  router.replace({
+    name: 'theme',
+    params: { id: themeId.value },
+    query: currentThemeQuery(route.query.focus ? Number(route.query.focus) : null)
+  });
+}
+
+function rememberListState(activeItemId = null) {
+  const raw = sessionStorage.getItem(storageKey.value);
+  let previous = null;
+  try { previous = raw ? JSON.parse(raw) : null; } catch (_) {}
+  const scrollY = window.scrollY > 0
+    ? window.scrollY
+    : (previous && typeof previous.scrollY === 'number' ? previous.scrollY : 0);
+  sessionStorage.setItem(
+    storageKey.value,
+    JSON.stringify({
+      page: page.value,
+      limit: limit.value,
+      q: q.value,
+      scrollY,
+      activeItemId: activeItemId ?? (previous && previous.activeItemId ? previous.activeItemId : null)
+    })
+  );
+}
+
+async function restoreScroll() {
+  const raw = sessionStorage.getItem(storageKey.value);
+  const focusId = route.query.focus ? Number(route.query.focus) : null;
+  if (!raw && !focusId) return;
+  try {
+    const saved = raw ? JSON.parse(raw) : null;
+    await nextTick();
+    await nextTick();
+    const targetId = focusId || (saved && saved.activeItemId ? Number(saved.activeItemId) : null);
+    if (targetId) {
+      const el = document.getElementById(cardDomId(targetId));
+      if (el) {
+        el.scrollIntoView({ block: 'center', behavior: 'auto' });
+        return;
+      }
+    }
+    if (saved && typeof saved.scrollY === 'number') {
+      window.scrollTo({ top: saved.scrollY, behavior: 'auto' });
+    }
+  } catch (_) {
+    // ignore broken saved state
+  }
+}
+
+function restoreListStateFromRouteOrStorage() {
+  page.value = parsePositive(route.query.page, 1);
+  limit.value = parsePositive(route.query.limit, 21);
+  q.value = typeof route.query.q === 'string' ? route.query.q : '';
+
+  if (route.query.page || route.query.limit || route.query.q) {
+    jumpInput.value = page.value;
+    return;
+  }
+
+  const raw = sessionStorage.getItem(storageKey.value);
+  if (!raw) {
+    jumpInput.value = page.value;
+    return;
+  }
+  try {
+    const saved = JSON.parse(raw);
+    page.value = parsePositive(saved.page, 1);
+    limit.value = parsePositive(saved.limit, 21);
+    q.value = typeof saved.q === 'string' ? saved.q : '';
+    jumpInput.value = page.value;
+  } catch (_) {
+    jumpInput.value = page.value;
+  }
+}
+
+function openMessage(id) {
+  rememberListState(id);
+  const themeHref = router.resolve({
+    name: 'theme',
+    params: { id: themeId.value },
+    query: currentThemeQuery(id)
+  }).href;
+  window.history.replaceState(window.history.state, '', themeHref);
+  router.push({
+    name: 'message',
+    params: { id },
+    query: {
+      theme: String(themeId.value),
+      ...currentThemeQuery(id)
+    }
+  });
+}
 
 async function load() {
   loading.value = true;
@@ -145,9 +266,15 @@ async function load() {
     if (page.value > totalPages.value) {
       page.value = totalPages.value;
       jumpInput.value = totalPages.value;
+      syncRouteQuery();
       return load();
     }
     jumpInput.value = page.value;
+    rememberListState();
+    if (shouldRestoreScroll.value) {
+      shouldRestoreScroll.value = false;
+      await restoreScroll();
+    }
   } catch (error) {
     console.error(error);
   } finally {
@@ -158,12 +285,26 @@ async function load() {
 function reload() {
   page.value = 1;
   jumpInput.value = 1;
+  shouldRestoreScroll.value = false;
+  router.replace({
+    name: 'theme',
+    params: { id: themeId.value },
+    query: currentThemeQuery()
+  });
+  rememberListState();
   load();
 }
 
 function go(nextPage) {
   page.value = nextPage;
   jumpInput.value = nextPage;
+  shouldRestoreScroll.value = false;
+  router.replace({
+    name: 'theme',
+    params: { id: themeId.value },
+    query: currentThemeQuery()
+  });
+  rememberListState();
   load();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -176,14 +317,28 @@ function jumpPage() {
 }
 
 watch(
-  () => route.params.id,
+  () => [route.params.id, route.query.page, route.query.limit, route.query.q, route.query.focus],
   () => {
-    page.value = 1;
-    jumpInput.value = 1;
-    q.value = '';
+    if (!initialized.value) return;
+    restoreListStateFromRouteOrStorage();
+    shouldRestoreScroll.value = true;
     load();
   }
 );
 
-onMounted(load);
+onMounted(() => {
+  restoreListStateFromRouteOrStorage();
+  shouldRestoreScroll.value = true;
+  initialized.value = true;
+  load();
+});
+
+onDeactivated(() => {
+  rememberListState(route.query.focus ? Number(route.query.focus) : null);
+});
+
+onActivated(async () => {
+  restoreListStateFromRouteOrStorage();
+  await restoreScroll();
+});
 </script>

@@ -43,6 +43,16 @@ function buildMediaList(msg) {
   return list;
 }
 
+function buildDisplayMedia(msg) {
+  const media = buildMediaList(msg);
+  const firstMainImage = media.find((item) => item.slot === 'main' && item.kind === 'image');
+  const firstCommentImage = media.find((item) => item.slot === 'comment' && item.kind === 'image');
+  return {
+    media,
+    cover_index: firstMainImage ? firstMainImage.index : (firstCommentImage ? firstCommentImage.index : null)
+  };
+}
+
 router.get('/themes/:id/messages', (req, res) => {
   const themeId = Number(req.params.id);
   if (!db.prepare('SELECT 1 FROM themes WHERE id=?').get(themeId)) return res.status(404).json({ error: 'theme not found' });
@@ -75,6 +85,7 @@ router.get('/messages/:id', (req, res) => {
   const msg = db.prepare('SELECT * FROM messages WHERE id=?').get(Number(req.params.id));
   if (!msg) return res.status(404).json({ error: 'not found' });
   const theme = db.prepare('SELECT id,name FROM themes WHERE id=?').get(msg.theme_id);
+  const display = buildDisplayMedia(msg);
   res.json({
     id: msg.id,
     theme_id: msg.theme_id,
@@ -87,7 +98,8 @@ router.get('/messages/:id', (req, res) => {
     publish_date: msg.publish_date,
     thumb_path: msg.thumb_path,
     media_count: msg.media_count,
-    media: buildMediaList(msg)
+    cover_index: display.cover_index,
+    media: display.media
   });
 });
 

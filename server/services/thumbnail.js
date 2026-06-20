@@ -61,10 +61,13 @@ function generateVideoThumb(localPath, dest) {
 }
 
 async function ensureThumb(adapter, sourceId, relDir, mainFiles, commentFiles, force) {
-  const imageCandidate = firstImage(mainFiles) || firstImage(commentFiles);
-  const videoCandidate = imageCandidate ? null : (firstVideo(mainFiles) || firstVideo(commentFiles));
+  const imageCandidates = [
+    ...(Array.isArray(mainFiles) ? mainFiles.filter((file) => isImage(file)) : []),
+    ...(Array.isArray(commentFiles) ? commentFiles.filter((file) => isImage(file)) : [])
+  ];
+  const videoCandidate = firstVideo(mainFiles) || firstVideo(commentFiles);
 
-  if (!imageCandidate && !videoCandidate) return null;
+  if (!imageCandidates.length && !videoCandidate) return null;
 
   const subDir = String(sourceId);
   const fileName = `${sha1(relDir)}.webp`;
@@ -75,11 +78,15 @@ async function ensureThumb(adapter, sourceId, relDir, mainFiles, commentFiles, f
   fs.mkdirSync(path.join(THUMBS_DIR, subDir), { recursive: true });
 
   try {
-    if (imageCandidate) {
-      const fileRel = relDir ? `${relDir}/${imageCandidate}` : imageCandidate;
-      const inputBuffer = await adapter.readBuffer(fileRel);
-      await writeImageThumb(inputBuffer, dest);
-      return relPath;
+    for (const imageCandidate of imageCandidates) {
+      try {
+        const fileRel = relDir ? `${relDir}/${imageCandidate}` : imageCandidate;
+        const inputBuffer = await adapter.readBuffer(fileRel);
+        await writeImageThumb(inputBuffer, dest);
+        return relPath;
+      } catch (_) {
+        // Try the next image candidate.
+      }
     }
 
     if (videoCandidate && typeof adapter.getLocalPath === 'function') {

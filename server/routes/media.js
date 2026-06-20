@@ -36,7 +36,45 @@ function resolveMessageMedia(messageId, index) {
   if (!source) return null;
   const adapter = getAdapter(source);
   const full = safeJoin(msg.rel_dir, fileRel);
-  return { msg, source, adapter, fileRel: full, fileName: fileRel.split('/').pop(), kind: isImage(fileRel) ? 'image' : 'video' };
+  const slot = idx < main.length ? 'main' : 'comment';
+  return { msg, source, adapter, fileRel: full, rawFileRel: fileRel, fileName: fileRel.split('/').pop(), kind: isImage(fileRel) ? 'image' : 'video', slot };
+}
+
+async function resolveExistingMediaPath(info) {
+  const candidates = [info.fileRel];
+  if (info.slot === 'main' && !String(info.rawFileRel).includes('/')) {
+    candidates.push(safeJoin(info.msg.rel_dir, 'main', info.rawFileRel));
+  }
+  for (const candidate of candidates) {
+    try {
+      if (info.adapter.kind === 'local') {
+        const fullPath = path.join(info.source.local_path, candidate);
+        if (fs.existsSync(fullPath)) return { rel: candidate, localPath: fullPath };
+      } else {
+        const stream = info.adapter.createReadStream(candidate, { start: 0, end: 0 });
+        await new Promise((resolve, reject) => {
+          let settled = false;
+          stream.on('response', () => {
+            if (!settled) { settled = true; resolve(); }
+          });
+          stream.on('data', () => {
+            if (!settled) { settled = true; resolve(); }
+            try { stream.destroy(); } catch (_) {}
+          });
+          stream.on('close', () => {
+            if (!settled) { settled = true; resolve(); }
+          });
+          stream.on('error', (error) => {
+            if (!settled) { settled = true; reject(error); }
+          });
+        });
+        return { rel: candidate };
+      }
+    } catch (_) {
+      // Try next candidate.
+    }
+  }
+  return null;
 }
 
 async function sendConvertedImage(res, filePath) {
@@ -56,11 +94,13 @@ function shouldConvertImage(fileName) {
 router.get('/:messageId/:index', async (req, res) => {
   const info = resolveMessageMedia(req.params.messageId, req.params.index);
   if (!info) return res.status(404).json({ error: 'not found' });
-  const { adapter, fileRel, fileName } = info;
+  const { adapter, fileName } = info;
+  const resolved = await resolveExistingMediaPath(info);
+  if (!resolved) return res.status(404).json({ error: 'not found' });
 
   if (adapter.kind === 'local') {
-    const filePath = path.join(info.source.local_path, fileRel);
-    if (!fs.existsSync(filePath)) return res.status(404).end();
+    const filePath = resolved.localPath;
+    if (!filePath || !fs.existsSync(filePath)) return res.status(404).end();
 
     if (isImage(fileName) && shouldConvertImage(fileName)) {
       try {
@@ -104,11 +144,11 @@ router.get('/:messageId/:index', async (req, res) => {
       const match = /bytes=(\d*)-(\d*)/.exec(req.headers.range);
       const start = match && match[1] ? parseInt(match[1], 10) : 0;
       const end = match && match[2] ? parseInt(match[2], 10) : undefined;
-      const stream = adapter.createReadStream(fileRel, { start, end });
+      const stream = adapter.createReadStream(resolved.rel, { start, end });
       stream.on('error', () => { if (!res.headersSent) res.status(500).end(); else res.destroy(); });
       stream.pipe(res);
     } else {
-      const stream = adapter.createReadStream(fileRel);
+      const stream = adapter.createReadStream(resolved.rel);
       stream.on('error', () => { if (!res.headersSent) res.status(500).end(); else res.destroy(); });
       stream.pipe(res);
     }

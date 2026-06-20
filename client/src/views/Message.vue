@@ -1,12 +1,13 @@
 <template>
   <div>
     <div class="mb-4 flex items-center gap-3">
-      <router-link
-        :to="msg ? `/theme/${msg.theme_id}` : '/'"
+      <button
+        type="button"
+        @click="goBack"
         class="text-sm text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
       >
         ← 返回
-      </router-link>
+      </button>
       <span v-if="msg" class="text-sm text-neutral-400">{{ msg.theme_name }}</span>
     </div>
 
@@ -14,82 +15,96 @@
     <div v-else-if="!msg" class="py-20 text-center text-neutral-400">资源不存在</div>
 
     <div v-else>
-      <div v-if="mainImages.length" class="mb-5 space-y-4">
-        <div
-          v-for="m in mainImages"
-          :key="`main-image-${m.index}`"
-          class="overflow-hidden rounded-2xl bg-neutral-100 dark:bg-neutral-900"
-        >
-          <img
-            :src="mediaUrl(m.index)"
-            loading="eager"
-            class="mx-auto max-h-[80vh] w-full cursor-zoom-in object-contain"
-            @click="openPreview(m.index)"
-          />
+      <section class="relative mb-8 overflow-visible rounded-[28px]">
+        <div class="overflow-hidden rounded-[28px] bg-neutral-100 dark:bg-neutral-900">
+          <div
+            v-if="heroImages.length"
+            class="relative mx-auto aspect-[16/9] max-h-[48vh] min-h-[240px] w-full max-w-5xl bg-neutral-200 dark:bg-neutral-800"
+          >
+            <img
+              :src="mediaUrl(heroImages[0].index)"
+              loading="eager"
+              class="h-full w-full object-cover opacity-55"
+              @click="openPreview(heroImages[0].index)"
+            />
+            <div class="absolute inset-0 bg-gradient-to-t from-white via-white/78 to-white/20 dark:from-neutral-950 dark:via-neutral-950/74 dark:to-neutral-950/15"></div>
+          </div>
+          <div
+            v-else
+            class="mx-auto flex aspect-[16/9] max-h-[48vh] min-h-[240px] w-full max-w-5xl items-center justify-center bg-neutral-200 text-sm text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+          >
+            无封面
+          </div>
         </div>
-      </div>
 
-      <div v-if="mainVideos.length" class="mb-5 space-y-4">
+        <div class="relative z-10 mx-auto -mt-24 w-[calc(100%-2rem)] max-w-4xl rounded-[24px] border border-white/70 bg-white/92 p-5 shadow-xl backdrop-blur dark:border-white/10 dark:bg-neutral-950/88">
+          <div v-if="msg.tags_text" class="mb-2 flex flex-wrap gap-1.5">
+            <span
+              v-for="tag in msg.tags_text.split(' ')"
+              :key="tag"
+              class="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600 dark:bg-blue-950 dark:text-blue-300"
+            >
+              {{ tag }}
+            </span>
+          </div>
+          <h1 class="text-lg font-bold leading-7">{{ msg.title || '(无标题)' }}</h1>
+          <p v-if="msg.description" class="mt-2 whitespace-pre-line text-sm leading-6 text-neutral-600 dark:text-neutral-300">
+            {{ msg.description }}
+          </p>
+          <div class="mt-3 text-xs text-neutral-400">{{ msg.source_chat }} · {{ msg.publish_date }}</div>
+        </div>
+      </section>
+
+      <div v-if="mainVideos.length" class="mb-6 space-y-5">
         <div
           v-for="m in mainVideos"
           :key="`main-video-${m.index}`"
-          class="overflow-hidden rounded-2xl bg-black"
+          class="mx-auto w-full max-w-4xl overflow-hidden rounded-2xl bg-black shadow-sm"
         >
-          <video
-            :src="mediaUrl(m.index)"
-            controls
-            preload="metadata"
-            playsinline
-            class="w-full"
-          ></video>
+          <div class="aspect-video w-full">
+            <video
+              :src="mediaUrl(m.index)"
+              controls
+              preload="metadata"
+              playsinline
+              class="h-full w-full object-contain"
+            ></video>
+          </div>
         </div>
       </div>
 
-      <div class="mb-6 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-        <div v-if="msg.tags_text" class="mb-2 flex flex-wrap gap-1.5">
-          <span
-            v-for="tag in msg.tags_text.split(' ')"
-            :key="tag"
-            class="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600 dark:bg-blue-950 dark:text-blue-300"
-          >
-            {{ tag }}
-          </span>
-        </div>
-        <h1 class="text-lg font-bold">{{ msg.title || '(无标题)' }}</h1>
-        <p v-if="msg.description" class="mt-2 whitespace-pre-line text-sm text-neutral-600 dark:text-neutral-300">
-          {{ msg.description }}
-        </p>
-        <div class="mt-2 text-xs text-neutral-400">{{ msg.source_chat }} · {{ msg.publish_date }}</div>
-      </div>
-
-      <div v-if="commentImages.length" class="space-y-6">
+      <div v-if="commentImages.length" class="space-y-5">
         <div
           v-for="m in commentImages"
           :key="`comment-image-${m.index}`"
-          class="overflow-hidden rounded-2xl bg-neutral-100 dark:bg-neutral-900"
+          class="mx-auto w-full max-w-4xl overflow-hidden rounded-2xl bg-neutral-100 shadow-sm dark:bg-neutral-900"
         >
-          <img
-            :src="mediaUrl(m.index)"
-            loading="lazy"
-            class="mx-auto max-h-[80vh] w-full cursor-zoom-in object-contain"
-            @click="openPreview(m.index)"
-          />
+          <div class="flex max-h-[72vh] min-h-[240px] items-center justify-center">
+            <img
+              :src="mediaUrl(m.index)"
+              loading="lazy"
+              class="max-h-[72vh] w-full cursor-zoom-in object-contain"
+              @click="openPreview(m.index)"
+            />
+          </div>
         </div>
       </div>
 
-      <div v-if="commentVideos.length" class="mt-6 space-y-6">
+      <div v-if="commentVideos.length" class="mt-6 space-y-5">
         <div
           v-for="m in commentVideos"
           :key="`comment-video-${m.index}`"
-          class="overflow-hidden rounded-2xl bg-black"
+          class="mx-auto w-full max-w-4xl overflow-hidden rounded-2xl bg-black shadow-sm"
         >
-          <video
-            :src="mediaUrl(m.index)"
-            controls
-            preload="metadata"
-            playsinline
-            class="w-full"
-          ></video>
+          <div class="aspect-video w-full">
+            <video
+              :src="mediaUrl(m.index)"
+              controls
+              preload="metadata"
+              playsinline
+              class="h-full w-full object-contain"
+            ></video>
+          </div>
         </div>
       </div>
     </div>
@@ -98,12 +113,13 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import PhotoSwipeLightbox from 'photoswipe/lightbox';
 import 'photoswipe/style.css';
 import { api } from '../api';
 
 const route = useRoute();
+const router = useRouter();
 
 const msg = ref(null);
 const loading = ref(true);
@@ -115,6 +131,36 @@ const mainVideos = computed(() => allMedia.value.filter((item) => item.slot === 
 const commentImages = computed(() => allMedia.value.filter((item) => item.slot === 'comment' && item.kind === 'image'));
 const commentVideos = computed(() => allMedia.value.filter((item) => item.slot === 'comment' && item.kind === 'video'));
 const imageMedia = computed(() => allMedia.value.filter((item) => item.kind === 'image'));
+
+const heroImages = computed(() => {
+  if (!msg.value) return [];
+  if (mainImages.value.length) return [mainImages.value[0]];
+  if (msg.value.cover_index == null) return [];
+  const fallback = allMedia.value.find((item) => item.index === msg.value.cover_index && item.kind === 'image');
+  return fallback ? [fallback] : [];
+});
+
+const backLink = computed(() => {
+  const theme = route.query.theme || (msg.value ? String(msg.value.theme_id) : null);
+  if (!theme) return '/';
+  return {
+    name: 'theme',
+    params: { id: theme },
+    query: {
+      ...(route.query.page ? { page: String(route.query.page) } : {}),
+      ...(route.query.limit ? { limit: String(route.query.limit) } : {}),
+      ...(route.query.q ? { q: String(route.query.q) } : {})
+    }
+  };
+});
+
+function goBack() {
+  if (window.history.length > 1) {
+    router.back();
+    return;
+  }
+  router.push(backLink.value);
+}
 
 function mediaUrl(index) {
   return api.mediaUrl(msg.value.id, index);

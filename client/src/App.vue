@@ -13,7 +13,12 @@
       </div>
     </header>
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
-      <router-view />
+      <router-view v-slot="{ Component, route }">
+        <keep-alive include="theme">
+          <component :is="Component" v-if="route.name === 'theme'" :key="route.name" />
+        </keep-alive>
+        <component :is="Component" v-if="route.name !== 'theme'" :key="route.fullPath" />
+      </router-view>
     </main>
     <footer class="text-center text-xs text-neutral-400 py-6">LewdLand · 本地媒体库</footer>
   </div>
