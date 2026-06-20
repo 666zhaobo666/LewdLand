@@ -11,27 +11,27 @@
 
     <div v-else class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
       <router-link
-        v-for="t in themes"
-        :key="t.id"
-        :to="`/theme/${t.id}`"
+        v-for="theme in themes"
+        :key="theme.id"
+        :to="`/theme/${theme.id}`"
         class="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 transition hover:shadow-lg dark:border-neutral-800 dark:bg-neutral-900"
       >
         <img
-          v-if="t.cover"
-          :src="api.thumbUrl(t.cover)"
-          :alt="t.name"
+          v-if="theme.cover"
+          :src="api.thumbUrl(theme.cover)"
+          :alt="theme.name"
           class="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
         />
         <div
           v-else
-          class="absolute inset-0 flex items-center justify-center text-4xl text-neutral-300 dark:text-neutral-700"
+          class="absolute inset-0 flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500"
         >
           无封面
         </div>
         <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent"></div>
         <div class="absolute inset-x-0 bottom-0 p-3">
-          <div class="clamp-2 font-semibold text-white">{{ t.name }}</div>
-          <div class="mt-0.5 text-xs text-white/75">{{ t.message_count }} 条资源</div>
+          <div class="clamp-2 font-semibold text-white">{{ theme.name }}</div>
+          <div class="mt-0.5 text-xs text-white/75">{{ theme.message_count }} 条资源</div>
         </div>
       </router-link>
     </div>

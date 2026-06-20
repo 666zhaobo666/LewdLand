@@ -41,16 +41,16 @@
 
     <div v-else class="grid grid-cols-2 gap-4 lg:grid-cols-3">
       <router-link
-        v-for="m in items"
-        :key="m.id"
-        :to="`/message/${m.id}`"
+        v-for="item in items"
+        :key="item.id"
+        :to="`/message/${item.id}`"
         class="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white transition hover:shadow-lg dark:border-neutral-800 dark:bg-neutral-900"
       >
         <div class="relative aspect-[4/3] overflow-hidden bg-neutral-100 dark:bg-neutral-800">
           <img
-            v-if="m.thumb_path"
-            :src="api.thumbUrl(m.thumb_path)"
-            :alt="m.title || '资源封面'"
+            v-if="item.thumb_path"
+            :src="api.thumbUrl(item.thumb_path)"
+            :alt="item.title || '资源封面'"
             loading="lazy"
             class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
           />
@@ -61,17 +61,17 @@
             无封面
           </div>
           <div
-            v-if="m.comment_count"
+            v-if="item.comment_count"
             class="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white"
           >
-            {{ m.main_count + m.comment_count }} 项
+            {{ item.main_count + item.comment_count }} 项
           </div>
         </div>
 
         <div class="flex flex-1 flex-col p-3">
-          <div v-if="m.tags_text" class="clamp-1 mb-1 text-[11px] text-blue-500">{{ m.tags_text }}</div>
-          <div class="clamp-2 text-sm font-medium">{{ m.title || '(无标题)' }}</div>
-          <div class="clamp-1 mt-1 text-[11px] text-neutral-400">{{ m.source_chat }}</div>
+          <div v-if="item.tags_text" class="clamp-1 mb-1 text-[11px] text-blue-500">{{ item.tags_text }}</div>
+          <div class="clamp-2 text-sm font-medium">{{ item.title || '(无标题)' }}</div>
+          <div class="clamp-1 mt-1 text-[11px] text-neutral-400">{{ item.source_chat }}</div>
         </div>
       </router-link>
     </div>

@@ -14,24 +14,34 @@
     <div v-else-if="!msg" class="py-20 text-center text-neutral-400">资源不存在</div>
 
     <div v-else>
-      <div class="mb-5 space-y-4">
+      <div v-if="mainImages.length" class="mb-5 space-y-4">
         <div
-          v-for="m in mainMedia"
-          :key="`main-${m.index}`"
+          v-for="m in mainImages"
+          :key="`main-image-${m.index}`"
           class="overflow-hidden rounded-2xl bg-neutral-100 dark:bg-neutral-900"
         >
           <img
-            v-if="m.kind === 'image'"
             :src="mediaUrl(m.index)"
-            loading="lazy"
+            loading="eager"
             class="mx-auto max-h-[80vh] w-full cursor-zoom-in object-contain"
             @click="openPreview(m.index)"
           />
-          <div
-            v-else
-            :ref="(el) => setVideoRef(el, m.index)"
-            class="w-full overflow-hidden rounded-2xl bg-black"
-          ></div>
+        </div>
+      </div>
+
+      <div v-if="mainVideos.length" class="mb-5 space-y-4">
+        <div
+          v-for="m in mainVideos"
+          :key="`main-video-${m.index}`"
+          class="overflow-hidden rounded-2xl bg-black"
+        >
+          <video
+            :src="mediaUrl(m.index)"
+            controls
+            preload="metadata"
+            playsinline
+            class="w-full"
+          ></video>
         </div>
       </div>
 
@@ -46,33 +56,40 @@
           </span>
         </div>
         <h1 class="text-lg font-bold">{{ msg.title || '(无标题)' }}</h1>
-        <p
-          v-if="msg.description"
-          class="mt-2 whitespace-pre-line text-sm text-neutral-600 dark:text-neutral-300"
-        >
+        <p v-if="msg.description" class="mt-2 whitespace-pre-line text-sm text-neutral-600 dark:text-neutral-300">
           {{ msg.description }}
         </p>
         <div class="mt-2 text-xs text-neutral-400">{{ msg.source_chat }} · {{ msg.publish_date }}</div>
       </div>
 
-      <div v-if="commentMedia.length" class="space-y-6">
+      <div v-if="commentImages.length" class="space-y-6">
         <div
-          v-for="m in commentMedia"
-          :key="`comment-${m.index}`"
+          v-for="m in commentImages"
+          :key="`comment-image-${m.index}`"
           class="overflow-hidden rounded-2xl bg-neutral-100 dark:bg-neutral-900"
         >
           <img
-            v-if="m.kind === 'image'"
             :src="mediaUrl(m.index)"
             loading="lazy"
             class="mx-auto max-h-[80vh] w-full cursor-zoom-in object-contain"
             @click="openPreview(m.index)"
           />
-          <div
-            v-else
-            :ref="(el) => setVideoRef(el, m.index)"
-            class="w-full overflow-hidden rounded-2xl bg-black"
-          ></div>
+        </div>
+      </div>
+
+      <div v-if="commentVideos.length" class="mt-6 space-y-6">
+        <div
+          v-for="m in commentVideos"
+          :key="`comment-video-${m.index}`"
+          class="overflow-hidden rounded-2xl bg-black"
+        >
+          <video
+            :src="mediaUrl(m.index)"
+            controls
+            preload="metadata"
+            playsinline
+            class="w-full"
+          ></video>
         </div>
       </div>
     </div>
@@ -80,7 +97,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import PhotoSwipeLightbox from 'photoswipe/lightbox';
 import 'photoswipe/style.css';
@@ -90,26 +107,17 @@ const route = useRoute();
 
 const msg = ref(null);
 const loading = ref(true);
-
-let ArtplayerCtor = null;
 let lightbox = null;
 
-const videoRefs = new Map();
-const players = new Map();
-
 const allMedia = computed(() => (msg.value ? msg.value.media : []));
-const mainMedia = computed(() => allMedia.value.filter((item) => item.slot === 'main'));
-const commentMedia = computed(() => allMedia.value.filter((item) => item.slot === 'comment'));
+const mainImages = computed(() => allMedia.value.filter((item) => item.slot === 'main' && item.kind === 'image'));
+const mainVideos = computed(() => allMedia.value.filter((item) => item.slot === 'main' && item.kind === 'video'));
+const commentImages = computed(() => allMedia.value.filter((item) => item.slot === 'comment' && item.kind === 'image'));
+const commentVideos = computed(() => allMedia.value.filter((item) => item.slot === 'comment' && item.kind === 'video'));
 const imageMedia = computed(() => allMedia.value.filter((item) => item.kind === 'image'));
-const videoMedia = computed(() => allMedia.value.filter((item) => item.kind === 'video'));
 
 function mediaUrl(index) {
   return api.mediaUrl(msg.value.id, index);
-}
-
-function setVideoRef(el, index) {
-  if (el) videoRefs.set(index, el);
-  else videoRefs.delete(index);
 }
 
 function imageSize(url) {
@@ -123,15 +131,12 @@ function imageSize(url) {
 
 async function createLightbox() {
   if (lightbox || !imageMedia.value.length) return;
+
   const items = await Promise.all(
     imageMedia.value.map(async (item) => {
       const src = mediaUrl(item.index);
       const size = await imageSize(src);
-      return {
-        src,
-        width: size.width,
-        height: size.height
-      };
+      return { src, width: size.width, height: size.height };
     })
   );
 
@@ -146,8 +151,7 @@ async function openPreview(index) {
   const imageIndex = imageMedia.value.findIndex((item) => item.index === index);
   if (imageIndex < 0) return;
   await createLightbox();
-  if (!lightbox) return;
-  lightbox.loadAndOpen(imageIndex);
+  if (lightbox) lightbox.loadAndOpen(imageIndex);
 }
 
 function destroyLightbox() {
@@ -157,80 +161,11 @@ function destroyLightbox() {
   }
 }
 
-async function getArtplayer() {
-  if (!ArtplayerCtor) {
-    ArtplayerCtor = (await import('artplayer')).default;
-  }
-  return ArtplayerCtor;
-}
-
-function detectVideoType(path) {
-  if (/\.m3u8$/i.test(path)) return 'm3u8';
-  if (/\.flv$/i.test(path)) return 'flv';
-  if (/\.webm$/i.test(path)) return 'webm';
-  return 'mp4';
-}
-
-async function ensurePlayer(item) {
-  if (players.has(item.index)) return players.get(item.index);
-  const container = videoRefs.get(item.index);
-  if (!container) return null;
-
-  container.style.minHeight = '240px';
-  container.style.aspectRatio = '16 / 9';
-
-  const Artplayer = await getArtplayer();
-  const player = new Artplayer({
-    container,
-    url: mediaUrl(item.index),
-    type: detectVideoType(item.path),
-    volume: 0.7,
-    autoplay: false,
-    setting: true,
-    playbackRate: true,
-    pip: true,
-    fullscreen: true,
-    fullscreenWeb: true,
-    miniProgressBar: true,
-    fastForward: true,
-    theme: '#2563eb'
-  });
-
-  players.set(item.index, player);
-  return player;
-}
-
-async function initVideos() {
-  await nextTick();
-  for (const item of videoMedia.value) {
-    try {
-      await ensurePlayer(item);
-    } catch (error) {
-      console.error('video init failed', item, error);
-    }
-  }
-}
-
-function destroyPlayers() {
-  for (const player of players.values()) {
-    try {
-      player.destroy(false);
-    } catch (_) {
-      // ignore player teardown errors
-    }
-  }
-  players.clear();
-  videoRefs.clear();
-}
-
 async function load() {
   loading.value = true;
-  destroyPlayers();
   destroyLightbox();
   try {
     msg.value = await api.message(Number(route.params.id));
-    await nextTick();
-    await initVideos();
   } catch (error) {
     console.error(error);
     msg.value = null;
@@ -242,8 +177,5 @@ async function load() {
 watch(() => route.params.id, load);
 
 onMounted(load);
-onBeforeUnmount(() => {
-  destroyPlayers();
-  destroyLightbox();
-});
+onBeforeUnmount(destroyLightbox);
 </script>

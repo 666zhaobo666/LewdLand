@@ -13,6 +13,7 @@ function localAdapter(source) {
   const root = source.local_path;
   return {
     kind: 'local',
+    root,
     async list(relDir) {
       const dir = relDir ? path.join(root, relDir) : root;
       const entries = await fs.promises.readdir(dir, { withFileTypes: true });
@@ -26,6 +27,7 @@ function localAdapter(source) {
     async readText(relFile) { return fs.promises.readFile(path.join(root, relFile), 'utf8'); },
     async readBuffer(relFile) { return fs.promises.readFile(path.join(root, relFile)); },
     async size(relFile) { return (await fs.promises.stat(path.join(root, relFile))).size; },
+    getLocalPath(relFile) { return path.join(root, relFile); },
     createReadStream(relFile, range) {
       const p = path.join(root, relFile);
       return range ? fs.createReadStream(p, { start: range.start, end: range.end }) : fs.createReadStream(p);
