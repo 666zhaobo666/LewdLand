@@ -161,7 +161,7 @@ sudo bash install.sh
 ### 安装脚本做了什么
 
 1. 检测包管理器(apt/dnf/yum/pacman/zypper)，安装 git、curl、编译工具
-2. 安装 Node.js 22(已装且版本够则跳过；apt/dnf/yum 走 NodeSource，其它用官方二进制)
+2. 安装 Node.js 24(已装且版本够则跳过；apt/dnf/yum 走 NodeSource，其它用官方二进制)
 3. 克隆仓库到 `/opt/lewland`
 4. `npm install` 后端依赖 + 构建前端
 5. 生成 `/etc/lewland/lewland.env`(随机 SESSION_SECRET，默认端口 3000，默认管理员密码 admin)
@@ -181,6 +181,16 @@ sudo bash install.sh
 **`/etc/lewland/lewland.env` 和 `/var/lib/lewland` 不在 git 仓库内，更新绝不覆盖。** 端口、数据、已扫描的索引、缩略图全部保留。
 
 ### 卸载
+
+### Node 版本要求
+
+后端使用 Node 内置的 `node:sqlite` 模块(无需安装任何数据库驱动)，因此对 Node 版本有要求(详见 [node:sqlite 文档](https://nodejs.org/api/sqlite.html))：
+
+- **最低存在**：v22.5.0(该版本起才有 `node:sqlite` 模块)
+- **无需 flag**：v22.13.0 / v23.4.0 起(更早的 22.5~22.12、23.0~23.3 需加 `--experimental-sqlite`)
+- **推荐**：Node 24(Stability 1.2 Release Candidate，最稳定)
+
+安装脚本一律安装 Node 24，并对已存在的 Node 做版本校验：`>=24`、或 `23.x>=4`、或 `22.x>=13` 才跳过安装，否则升级到 Node 24。低于 v22.5 的 Node(如 18/20/21)因没有 `node:sqlite` 模块，服务会启动失败，脚本会自动升级。
 
 卸载会删除服务、代码、配置、数据(需输入 `yes` 确认)。如需保留数据，卸载前先备份 `/var/lib/lewland`。
 

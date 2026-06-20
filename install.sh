@@ -20,7 +20,11 @@ SERVICE_FILE="/etc/systemd/system/lewland.service"
 SERVICE_NAME="lewland.service"
 RUN_USER="lewland"
 REPO_URL="https://github.com/666zhaobo666/LewdLand.git"
-NODE_REQUIRED="18"   # node:sqlite 需要 Node 18+ (实际建议 22.5+)
+# node:sqlite 内置模块要求(见 https://nodejs.org/api/sqlite.html):
+#   - v22.5.0 起引入该模块
+#   - v22.13.0 / v23.4.0 起无需 --experimental-sqlite flag(但仍 experimental)
+#   - v24.0.0 起为 Release Candidate(Stability 1.2，最稳定)
+# 本脚本一律安装 Node 24 LTS。
 
 # ---------- 颜色 ----------
 if [[ -t 1 ]]; then
@@ -66,23 +70,35 @@ install_packages() {
 }
 
 install_node() {
+  # 检查已有 Node 是否满足 node:sqlite 无 flag 要求(>=24，或 23.x>=4，或 22.x>=13)
   if command -v node >/dev/null 2>&1; then
-    local v; v=$(node -v 2>/dev/null | sed 's/v//'); v=${v%%.*}
-    if [[ "$v" -ge "$NODE_REQUIRED" ]]; then log "已安装 Node $(node -v)"; return 0; fi
-    warn "Node 版本过低(需要 >= ${NODE_REQUIRED})，安装新版本"
+    local v major minor rest
+    v=$(node -v 2>/dev/null | sed 's/v//')      # e.g. 24.15.0
+    major=${v%%.*}; rest=${v#*.}; minor=${rest%%.*}
+    if [[ "$major" =~ ^[0-9]+$ ]] && {
+         [[ "$major" -ge 24 ]] ||
+         [[ "$major" -eq 23 && "$minor" -ge 4 ]] ||
+         [[ "$major" -eq 22 && "$minor" -ge 13 ]];
+       }; then
+      log "已安装 Node $(node -v) (满足 node:sqlite 要求)"
+      return 0
+    fi
+    warn "Node $(node -v) 不满足要求(需 >=22.13 或 >=24)，安装 Node 24"
+  else
+    info "未检测到 Node，安装 Node 24 LTS"
   fi
-  info "通过 NodeSource 安装 Node.js"
+  info "通过 NodeSource 安装 Node.js 24"
   if [[ "$PM" == "apt" ]]; then
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1 || die "NodeSource setup 失败"
+    curl -fsSL https://deb.nodesource.com/setup_24.x | bash - >/dev/null 2>&1 || die "NodeSource setup 失败"
     apt-get install -y nodejs >/dev/null 2>&1 || die "安装 nodejs 失败"
   elif [[ "$PM" == "dnf" || "$PM" == "yum" ]]; then
-    curl -fsSL https://rpm.nodesource.com/setup_22.x | bash - >/dev/null 2>&1 || die "NodeSource setup 失败"
+    curl -fsSL https://rpm.nodesource.com/setup_24.x | bash - >/dev/null 2>&1 || die "NodeSource setup 失败"
     $PM_INSTALL nodejs >/dev/null 2>&1 || die "安装 nodejs 失败"
   else
     # pacman/zypper 或未知: 用官方二进制
     local arch; arch=$(uname -m)
     case "$arch" in x86_64) arch="x64";; aarch64|arm64) arch="arm64";; *) die "不支持的架构 $arch";; esac
-    local ver="v22.11.0"
+    local ver="v24.0.0"
     local tmp="/tmp/node.tar.xz"
     curl -fsSL "https://nodejs.org/dist/${ver}/node-${ver}-linux-${arch}.tar.xz" -o "$tmp" || die "下载 Node 失败"
     tar -xJf "$tmp" -C /usr/local --strip-components=1 || die "解压 Node 失败"
