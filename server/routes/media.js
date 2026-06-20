@@ -91,6 +91,37 @@ function shouldConvertImage(fileName) {
   return ext === 'heic' || ext === 'heif' || ext === 'avif' || ext === 'tif' || ext === 'tiff';
 }
 
+function parseRangeHeader(rangeHeader, size) {
+  if (!rangeHeader) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+  if (!match) return null;
+
+  let start;
+  let end;
+  if (match[1] === '' && match[2] === '') return null;
+
+  if (match[1] === '') {
+    const suffixLength = parseInt(match[2], 10);
+    if (!Number.isFinite(suffixLength) || suffixLength <= 0) return null;
+    start = Math.max(size - suffixLength, 0);
+    end = size - 1;
+  } else {
+    start = parseInt(match[1], 10);
+    end = match[2] ? parseInt(match[2], 10) : size - 1;
+  }
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= size || end < start) {
+    return null;
+  }
+  return { start, end: Math.min(end, size - 1) };
+}
+
+function sendRangeNotSatisfiable(res, size) {
+  res.status(416);
+  res.setHeader('Content-Range', `bytes */${size}`);
+  res.end();
+}
+
 router.get('/:messageId/:index', async (req, res) => {
   const info = resolveMessageMedia(req.params.messageId, req.params.index);
   if (!info) return res.status(404).json({ error: 'not found' });
@@ -119,13 +150,12 @@ router.get('/:messageId/:index', async (req, res) => {
       res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
     }
     if (req.headers.range) {
-      const match = /bytes=(\d*)-(\d*)/.exec(req.headers.range);
-      let start = match && match[1] ? parseInt(match[1], 10) : 0;
-      let end = match && match[2] ? parseInt(match[2], 10) : stat.size - 1;
-      if (end >= stat.size) end = stat.size - 1;
-      res.status(206).setHeader('Content-Range', `bytes ${start}-${end}/${stat.size}`);
-      res.setHeader('Content-Length', end - start + 1);
-      fs.createReadStream(filePath, { start, end }).pipe(res);
+      const range = parseRangeHeader(req.headers.range, stat.size);
+      if (!range) return sendRangeNotSatisfiable(res, stat.size);
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${stat.size}`);
+      res.setHeader('Content-Length', range.end - range.start + 1);
+      fs.createReadStream(filePath, { start: range.start, end: range.end }).pipe(res);
     } else {
       res.setHeader('Content-Length', stat.size);
       fs.createReadStream(filePath).pipe(res);
@@ -134,17 +164,24 @@ router.get('/:messageId/:index', async (req, res) => {
   }
 
   try {
+    const size = await adapter.size(resolved.rel).catch(() => null);
     res.type(mimeFor(fileName));
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'public, max-age=3600');
+    if (size != null) res.setHeader('Content-Length', size);
     if (req.query.download) {
       res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
     }
     if (req.headers.range) {
-      const match = /bytes=(\d*)-(\d*)/.exec(req.headers.range);
-      const start = match && match[1] ? parseInt(match[1], 10) : 0;
-      const end = match && match[2] ? parseInt(match[2], 10) : undefined;
-      const stream = adapter.createReadStream(resolved.rel, { start, end });
+      if (size == null) {
+        return res.status(500).json({ error: 'unable to determine media size for range request' });
+      }
+      const range = parseRangeHeader(req.headers.range, size);
+      if (!range) return sendRangeNotSatisfiable(res, size);
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
+      res.setHeader('Content-Length', range.end - range.start + 1);
+      const stream = adapter.createReadStream(resolved.rel, { start: range.start, end: range.end });
       stream.on('error', () => { if (!res.headersSent) res.status(500).end(); else res.destroy(); });
       stream.pipe(res);
     } else {
