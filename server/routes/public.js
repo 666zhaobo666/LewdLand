@@ -11,21 +11,40 @@ router.get('/themes', (req, res) => {
     SELECT
       t.id,
       t.name,
-      COALESCE(
-        t.cover,
-        (
-          SELECT m.thumb_path
-          FROM messages m
-          WHERE m.theme_id = t.id AND m.thumb_path IS NOT NULL
-          ORDER BY COALESCE(m.publish_date, '') DESC, m.id DESC
-          LIMIT 1
-        )
-      ) AS cover,
+      t.cover AS manual_cover,
       t.sort_order
     FROM themes t
     ORDER BY t.sort_order, t.id
   `).all();
   for (const t of themes) {
+    const latestWithThumb = db.prepare(`
+      SELECT id, thumb_path
+      FROM messages
+      WHERE theme_id = ? AND thumb_path IS NOT NULL
+      ORDER BY COALESCE(publish_date, '') DESC, id DESC
+      LIMIT 1
+    `).get(t.id);
+    const latestMessage = db.prepare(`
+      SELECT id, main_files, comment_files
+      FROM messages
+      WHERE theme_id = ?
+      ORDER BY COALESCE(publish_date, '') DESC, id DESC
+      LIMIT 1
+    `).get(t.id);
+
+    t.cover = t.manual_cover || (latestWithThumb ? latestWithThumb.thumb_path : null);
+    t.cover_video_message_id = null;
+    t.cover_video_index = null;
+
+    if (!t.cover && latestMessage) {
+      const display = buildDisplayMedia(latestMessage);
+      if (display.cover_video_index != null) {
+        t.cover_video_message_id = latestMessage.id;
+        t.cover_video_index = display.cover_video_index;
+      }
+    }
+
+    delete t.manual_cover;
     t.message_count = db.prepare('SELECT COUNT(*) c FROM messages WHERE theme_id=?').get(t.id).c;
   }
   res.json(themes);

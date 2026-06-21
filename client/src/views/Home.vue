@@ -22,6 +22,16 @@
           :alt="theme.name"
           class="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
         />
+        <div v-else-if="theme.cover_video_message_id != null && theme.cover_video_index != null" class="absolute inset-0">
+          <img
+            :src="api.posterUrl(theme.cover_video_message_id, theme.cover_video_index)"
+            :alt="theme.name"
+            class="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
+          />
+          <div class="absolute inset-0 flex items-center justify-center">
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-xl text-white">▶</div>
+          </div>
+        </div>
         <div
           v-else
           class="absolute inset-0 flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500"
