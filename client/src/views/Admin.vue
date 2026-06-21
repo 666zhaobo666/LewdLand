@@ -7,10 +7,31 @@
 
     <div v-else class="space-y-8">
       <section>
-        <div class="mb-3 flex items-center gap-3">
+        <div class="mb-3 flex flex-wrap items-center gap-3">
           <h2 class="text-lg font-bold">主题</h2>
           <button @click="openTheme()" class="ml-auto rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white">
             + 新建主题
+          </button>
+          <button
+            @click="exportConfig()"
+            title="导出所有主题与数据源配置为 JSON 文件"
+            class="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700"
+          >
+            导出配置
+          </button>
+          <label
+            class="cursor-pointer rounded-lg border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700"
+            title="从 JSON 文件导入主题与数据源"
+          >
+            导入配置
+            <input type="file" accept="application/json" class="hidden" @change="onImportFile" />
+          </label>
+          <button
+            @click="scanAll(forceRescan)"
+            class="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white"
+            title="对所有启用的数据源启动一次后台扫描"
+          >
+            扫描全部
           </button>
           <button
             @click="logout"
@@ -18,6 +39,51 @@
           >
             退出
           </button>
+        </div>
+
+        <div v-if="jobs.length" class="mb-3 rounded-xl border border-neutral-200 p-3 text-xs dark:border-neutral-800">
+          <div class="mb-2 flex items-center gap-2">
+            <span class="font-semibold">扫描任务</span>
+            <span class="text-neutral-400">{{ jobs.length }} 个 / 并发 {{ maxConcurrent }}</span>
+            <button @click="clearFinishedJobs" class="ml-auto text-blue-500 hover:underline">刷新</button>
+          </div>
+          <ul class="space-y-1">
+            <li
+              v-for="j in jobs" :key="j.id"
+              class="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              :class="j.status === 'running' ? 'bg-emerald-50 dark:bg-emerald-950/30' : ''"
+            >
+              <span
+                class="inline-block h-2 w-2 rounded-full"
+                :class="j.status === 'queued' ? 'bg-neutral-400' : j.status === 'running' ? 'bg-emerald-500' : j.status === 'done' ? 'bg-blue-500' : 'bg-red-500'"
+              ></span>
+              <button
+                v-if="j.status === 'queued' || j.status === 'running'"
+                @click="showJobInModal(j)"
+                class="flex-1 truncate text-left hover:underline"
+              >{{ j.label || j.id }}</button>
+              <span v-else class="flex-1 truncate text-left">{{ j.label || j.id }}</span>
+              <span class="shrink-0 text-neutral-400">
+                <template v-if="j.status === 'queued'">排队中</template>
+                <template v-else-if="j.status === 'running'">{{ j.progress.current }}/{{ j.progress.total }}</template>
+                <template v-else-if="j.status === 'done'">完成 ({{ (j.duration_ms / 1000).toFixed(1) }}s)</template>
+                <template v-else>错误</template>
+              </span>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="importReport" class="mb-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs dark:border-blue-900 dark:bg-blue-950/30">
+          <div class="mb-1 font-semibold">导入预览 (dry-run)</div>
+          <div>主题: 复用 {{ importReport.themes.reused.length }}, 将创建 {{ importReport.themes.created.length }}, 跳过 {{ importReport.themes.skipped.length }}</div>
+          <div>数据源: 将创建 {{ importReport.sources.created.length }}, 跳过 {{ importReport.sources.skipped.length }}</div>
+          <div v-if="importReport.errors.length" class="mt-1 text-red-500">
+            错误: {{ importReport.errors.join('; ') }}
+          </div>
+          <div class="mt-2 flex gap-2">
+            <button @click="confirmImport(true)" class="rounded bg-blue-600 px-2 py-1 text-white">确认导入</button>
+            <button @click="importReport = null" class="rounded border border-neutral-300 px-2 py-1">取消</button>
+          </div>
         </div>
 
         <div v-if="themes.length === 0" class="text-sm text-neutral-400">还没有主题，点击“新建主题”添加。</div>
@@ -289,6 +355,7 @@ const activeTheme = ref(null);
 
 const scan = ref({
   active: false,
+  jobId: null,
   title: '',
   phase: '',
   current: 0,
@@ -297,6 +364,10 @@ const scan = ref({
   done: false,
   summary: ''
 });
+
+const importReport = ref(null);
+const importPayload = ref(null);
+const forceRescan = ref(false);
 let stopScanStream = null;
 
 const progressPercent = computed(() => {
@@ -551,7 +622,61 @@ async function changePwd() {
 onMounted(async () => {
   await refreshAuth();
   if (authed.value) {
+    startJobsListStream();
+    jobs.value = (await api.listScanJobs().catch(() => ({ jobs: [] }))).jobs;
     await loadThemes();
   }
 });
+onBeforeUnmount(() => {
+  stopJobsListStream();
+  for (const stop of jobStreams.values()) { try { stop(); } catch (_) {} }
+  jobStreams.clear();
+});
+
+// ---------- Config export / import ----------
+
+async function exportConfig(includeSecrets = false) {
+  try {
+    const blob = await api.exportConfig(includeSecrets);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    a.download = `lewdland-config-${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('导出失败: ' + (e && e.message ? e.message : e));
+  }
+}
+
+async function onImportFile(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = ''; // allow re-selecting the same file
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    if (!payload || typeof payload !== 'object') throw new Error('不是有效的 JSON');
+    importPayload.value = payload;
+    const report = await api.importConfig(payload, { dryRun: true, createMissing: true });
+    importReport.value = report;
+  } catch (e) {
+    alert('导入失败: ' + (e && e.message ? e.message : e));
+  }
+}
+
+async function confirmImport() {
+  if (!importPayload.value) return;
+  try {
+    const report = await api.importConfig(importPayload.value, { dryRun: false, createMissing: true });
+    importReport.value = report;
+    importPayload.value = null;
+    await loadThemes();
+  } catch (e) {
+    alert('导入失败: ' + (e && e.message ? e.message : e));
+  }
+}
 </script>

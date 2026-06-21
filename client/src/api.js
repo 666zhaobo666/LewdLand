@@ -44,6 +44,45 @@ export const api = {
     req(`/admin/scan/theme/${id}`, { method: 'POST', body: JSON.stringify({ force }) }),
   scanSource: (id, force = false) =>
     req(`/admin/scan/source/${id}`, { method: 'POST', body: JSON.stringify({ force }) }),
+  enqueueScan: (scope, id, force = false) =>
+    req(`/admin/scan/queue/${scope}/${id}`, { method: 'POST', body: JSON.stringify({ force }) }),
+  enqueueAllScan: (force = false) =>
+    req('/admin/scan/queue/all', { method: 'POST', body: JSON.stringify({ force }) }),
+  listScanJobs: () => req('/admin/scan/jobs'),
+  getScanJob: (id) => req(`/admin/scan/job/${id}`),
+  cancelScanJob: (id) => req(`/admin/scan/job/${id}`, { method: 'DELETE' }),
+  scanJobsStream: (onEvent) => {
+    const url = `${BASE}/admin/scan/stream/jobs`;
+    const eventSource = new EventSource(url);
+    eventSource.onmessage = (event) => {
+      try { onEvent(JSON.parse(event.data)); }
+      catch (_) { /* ignore */ }
+    };
+    eventSource.onerror = () => onEvent({ type: 'error', message: '连接中断' });
+    return () => eventSource.close();
+  },
+  scanJobStream: (id, onEvent) => {
+    const url = `${BASE}/admin/scan/stream/job/${id}`;
+    const eventSource = new EventSource(url);
+    eventSource.onmessage = (event) => {
+      try { onEvent(JSON.parse(event.data)); }
+      catch (_) { /* ignore */ }
+    };
+    eventSource.onerror = () => onEvent({ type: 'error', message: '连接中断' });
+    return () => eventSource.close();
+  },
+  exportConfig: (includeSecrets = false) =>
+    fetch(`${BASE}/admin/config/export?include_secrets=${includeSecrets ? 1 : 0}`, { credentials: 'same-origin' })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); }),
+  importConfig: (payload, { dryRun = false, createMissing = false } = {}) =>
+    req('/admin/config/import', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...payload,
+        dry_run: dryRun,
+        create_missing_themes: createMissing
+      })
+    }),
   scanStream: (scope, id, force, onEvent) => {
     const url = `${BASE}/admin/scan/stream/${scope}/${id}?force=${force ? 1 : 0}`;
     const eventSource = new EventSource(url);
