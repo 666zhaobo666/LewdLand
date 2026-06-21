@@ -32,6 +32,7 @@ function createScanManager({ maxConcurrent = 2, getJobTimeoutMs = 60_000 } = {})
   const queue = [];              // pending jobIds
   const running = new Set();     // active jobIds
   const clients = new Map();     // jobId -> Set<res> (SSE writers)
+  let lastBroadcastAt = 0;
 
   function now() { return new Date().toISOString(); }
 
@@ -62,6 +63,7 @@ function createScanManager({ maxConcurrent = 2, getJobTimeoutMs = 60_000 } = {})
         current: job.current,
         total: job.total
       },
+      phase: job.phase || null,
       summary: job.summary,
       error: job.error
     };
@@ -87,6 +89,14 @@ function createScanManager({ maxConcurrent = 2, getJobTimeoutMs = 60_000 } = {})
     }
   }
 
+  function broadcastListThrottled(force = false) {
+    const nowMs = Date.now();
+    if (force || nowMs - lastBroadcastAt >= 200) {
+      lastBroadcastAt = nowMs;
+      broadcastList();
+    }
+  }
+
   function pump() {
     while (running.size < maxConcurrent && queue.length) {
       const jobId = queue.shift();
@@ -99,8 +109,9 @@ function createScanManager({ maxConcurrent = 2, getJobTimeoutMs = 60_000 } = {})
   function startJob(job) {
     job.status = 'running';
     job.started_at = now();
+    job.phase = 'starting';
     running.add(job.id);
-    broadcastList();
+    broadcastListThrottled(true);
 
     emitToJob(job.id, { type: 'queued', job_id: job.id });
     emitToJob(job.id, {
@@ -120,16 +131,21 @@ function createScanManager({ maxConcurrent = 2, getJobTimeoutMs = 60_000 } = {})
       }
       event.job_id = job.id;
       // Track current/total for snapshot.
+      if (type === 'start') job.phase = event.label ? `扫描 ${event.label}` : '扫描中';
       if (type === 'scan_done') job.total = event.total || job.total;
       if (type === 'progress') {
         job.current = event.current || job.current;
         job.total = event.total || job.total;
         job.lastDir = event.dir;
+        job.phase = event.dir ? `处理 ${event.dir}` : '处理中';
       }
       if (type === 'process_done') {
         job.summary = `inserted=${event.inserted} updated=${event.updated} failed=${event.failed}`;
+        job.phase = '收尾中';
       }
+      if (type === 'warn') job.phase = event.message || job.phase;
       emitToJob(job.id, event);
+      broadcastListThrottled();
     };
 
     let work;
@@ -158,6 +174,7 @@ function createScanManager({ maxConcurrent = 2, getJobTimeoutMs = 60_000 } = {})
   function finishJob(job, results, errorMessage) {
     job.finished_at = now();
     job.status = errorMessage ? 'error' : 'done';
+    job.phase = errorMessage ? errorMessage : 'done';
     if (errorMessage) job.error = errorMessage;
     if (results) job.summary = JSON.stringify(results, null, 2);
     running.delete(job.id);
@@ -175,7 +192,7 @@ function createScanManager({ maxConcurrent = 2, getJobTimeoutMs = 60_000 } = {})
         clients.delete(job.id);
       }
     }, 50);
-    broadcastList();
+    broadcastListThrottled(true);
     pump();
   }
 
@@ -193,6 +210,7 @@ function createScanManager({ maxConcurrent = 2, getJobTimeoutMs = 60_000 } = {})
       finished_at: null,
       current: 0,
       total: 0,
+      phase: null,
       summary: null,
       error: null,
       source_id: null,
@@ -238,6 +256,7 @@ function createScanManager({ maxConcurrent = 2, getJobTimeoutMs = 60_000 } = {})
         finished_at: null,
         current: 0,
         total: 0,
+        phase: null,
         summary: null,
         error: null,
         source_id: null,
