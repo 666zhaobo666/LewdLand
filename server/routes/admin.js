@@ -227,12 +227,17 @@ router.get('/scan/job/:id', (req, res) => {
 });
 
 router.delete('/scan/job/:id', (req, res) => {
-  const list = scanManager.listJobs();
-  const job = list.find((j) => j.id === req.params.id);
+  const job = scanManager.getJob(req.params.id);
   if (!job) return res.status(404).json({ error: 'job not found' });
   if (job.status === 'running') return res.status(409).json({ error: 'job is already running' });
-  scanManager.clearFinished();
-  res.json({ ok: true });
+  const ok = scanManager.removeJob(req.params.id);
+  if (!ok) return res.status(409).json({ error: 'job could not be removed' });
+  res.json({ ok: true, removed: req.params.id });
+});
+
+router.delete('/scan/jobs/finished', (req, res) => {
+  const removed = scanManager.clearFinished();
+  res.json({ ok: true, removed });
 });
 
 router.get('/scan/stream/job/:id', (req, res) => {

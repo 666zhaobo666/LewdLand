@@ -61,16 +61,13 @@
               loading="lazy"
               class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
             />
-            <video
+            <div
               v-else-if="item.cover_video_index != null"
-              :src="api.mediaUrl(item.id, item.cover_video_index)"
-              autoplay
-              muted
-              loop
-              playsinline
-              preload="metadata"
-              class="h-full w-full object-cover"
-            ></video>
+              class="flex h-full w-full flex-col items-center justify-center bg-neutral-900 text-neutral-200"
+            >
+              <div class="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-xl">▶</div>
+              <div class="text-sm">视频资源</div>
+            </div>
             <div
               v-else
               class="flex h-full w-full items-center justify-center text-sm text-neutral-400 dark:text-neutral-500"

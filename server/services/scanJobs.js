@@ -233,12 +233,32 @@ function createScanManager({ maxConcurrent = 2, getJobTimeoutMs = 60_000 } = {})
   }
 
   function clearFinished() {
+    let removed = 0;
     for (const [id, job] of jobs.entries()) {
       if (job.status === 'done' || job.status === 'error') {
         jobs.delete(id);
+        removed++;
       }
     }
     broadcastList();
+    return removed;
+  }
+
+  function removeJob(id) {
+    const job = jobs.get(id);
+    if (!job || job.status === 'running') return false;
+    jobs.delete(id);
+    const idx = queue.indexOf(id);
+    if (idx >= 0) queue.splice(idx, 1);
+    const set = clients.get(id);
+    if (set) {
+      for (const res of set) {
+        try { res.end(); } catch (_) {}
+      }
+      clients.delete(id);
+    }
+    broadcastList();
+    return true;
   }
 
   function attach(id, res) {
@@ -297,6 +317,7 @@ function createScanManager({ maxConcurrent = 2, getJobTimeoutMs = 60_000 } = {})
     getJob,
     listJobs,
     clearFinished,
+    removeJob,
     attach,
     setMaxConcurrent(n) { maxConcurrent = Math.max(1, Number(n) || 1); broadcastList(); pump(); },
     getMaxConcurrent() { return maxConcurrent; }

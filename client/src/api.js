@@ -51,6 +51,7 @@ export const api = {
   listScanJobs: () => req('/admin/scan/jobs'),
   getScanJob: (id) => req(`/admin/scan/job/${id}`),
   cancelScanJob: (id) => req(`/admin/scan/job/${id}`, { method: 'DELETE' }),
+  clearFinishedScanJobs: () => req('/admin/scan/jobs/finished', { method: 'DELETE' }),
   scanJobsStream: (onEvent) => {
     const url = `${BASE}/admin/scan/stream/jobs`;
     const eventSource = new EventSource(url);
