@@ -66,13 +66,21 @@
               class="relative h-full w-full overflow-hidden bg-neutral-900"
             >
               <img
+                v-if="!posterFailedIds.has(item.id)"
                 :src="api.posterUrl(item.id, item.cover_video_index)"
                 :alt="item.title || '视频封面'"
                 loading="lazy"
                 class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                @error="markPosterFailed(item.id)"
               />
               <div class="absolute inset-0 flex items-center justify-center">
                 <div class="flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-xl text-white">▶</div>
+              </div>
+              <div
+                v-if="posterFailedIds.has(item.id)"
+                class="absolute inset-x-3 bottom-3 rounded-lg bg-black/60 px-2 py-1 text-center text-xs text-white"
+              >
+                视频封面生成失败
               </div>
             </div>
             <div
@@ -156,9 +164,9 @@ const q = ref('');
 const jumpInput = ref(1);
 const initialized = ref(false);
 const pendingRestore = ref(false);
+const posterFailedIds = ref(new Set());
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)));
-
 const isThemeRoute = computed(() => route.name === 'theme' && Number(route.params.id) === themeId.value);
 
 function parsePositive(value, fallback) {
@@ -168,6 +176,11 @@ function parsePositive(value, fallback) {
 
 function cardDomId(id) {
   return `theme-card-${themeId.value}-${id}`;
+}
+
+function markPosterFailed(id) {
+  if (posterFailedIds.value.has(id)) return;
+  posterFailedIds.value = new Set([...posterFailedIds.value, id]);
 }
 
 function themeQuery(focus = null) {
@@ -283,6 +296,7 @@ async function load({ restore = false } = {}) {
     const currentTheme = themes.find((item) => item.id === themeId.value);
     themeName.value = currentTheme ? currentTheme.name : '';
     items.value = data.items || [];
+    posterFailedIds.value = new Set();
     total.value = data.total || 0;
 
     if (page.value > totalPages.value) {

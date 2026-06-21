@@ -2,16 +2,36 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { pipeline } = require('stream/promises');
 const { THUMBS_DIR } = require('../config');
 const { isImage, isVideo, sha1 } = require('../util');
 
 let _sharp = null;
+let _ffmpegStatus = null;
 async function getSharp() {
   if (_sharp) return _sharp;
   _sharp = (await import('sharp')).default;
   return _sharp;
+}
+
+function getFfmpegStatus() {
+  if (_ffmpegStatus) return _ffmpegStatus;
+  const result = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' });
+  if (result.error) {
+    _ffmpegStatus = { ok: false, error: result.error.message };
+    return _ffmpegStatus;
+  }
+  if (result.status !== 0) {
+    _ffmpegStatus = {
+      ok: false,
+      error: (result.stderr || result.stdout || `ffmpeg exited with code ${result.status}`).trim()
+    };
+    return _ffmpegStatus;
+  }
+  const firstLine = String(result.stdout || '').split(/\r?\n/).find(Boolean) || 'ffmpeg available';
+  _ffmpegStatus = { ok: true, version: firstLine.trim() };
+  return _ffmpegStatus;
 }
 
 function firstMatch(files, predicate) {
@@ -55,7 +75,13 @@ function runFfmpegFrameExtract(args, stdinStream, opts) {
   opts = opts || {};
   const timeoutMs = opts.timeoutMs || 30000;
   return new Promise((resolve, reject) => {
-    const ffmpeg = spawn('ffmpeg', args, { stdio: ['pipe', 'ignore', 'ignore'] });
+    const status = getFfmpegStatus();
+    if (!status.ok) {
+      reject(new Error(`ffmpeg unavailable: ${status.error}`));
+      return;
+    }
+    const ffmpeg = spawn('ffmpeg', args, { stdio: ['pipe', 'ignore', 'pipe'] });
+    let stderr = '';
     let settled = false;
     const finish = (err) => {
       if (settled) return;
@@ -66,10 +92,16 @@ function runFfmpegFrameExtract(args, stdinStream, opts) {
       if (err) reject(err); else resolve();
     };
     const timeout = setTimeout(() => finish(new Error('ffmpeg timed out')), timeoutMs);
+    ffmpeg.stderr.on('data', (chunk) => {
+      if (stderr.length < 4000) stderr += String(chunk);
+    });
     ffmpeg.on('error', finish);
     ffmpeg.on('close', (code) => {
       if (code === 0) finish();
-      else finish(new Error('ffmpeg exited with code ' + code));
+      else {
+        const details = stderr.trim();
+        finish(new Error(details ? `ffmpeg exited with code ${code}: ${details}` : 'ffmpeg exited with code ' + code));
+      }
     });
     if (stdinStream) {
       stdinStream.on('error', finish);
@@ -169,4 +201,12 @@ async function ensureThumb(adapter, sourceId, relDir, mainFiles, commentFiles, f
   return null;
 }
 
-module.exports = { ensureThumb, firstImage, firstVideo, getSharp, generateVideoThumbFromFile, generateVideoThumbFromStream };
+module.exports = {
+  ensureThumb,
+  firstImage,
+  firstVideo,
+  getSharp,
+  getFfmpegStatus,
+  generateVideoThumbFromFile,
+  generateVideoThumbFromStream
+};

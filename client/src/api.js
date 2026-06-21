@@ -23,6 +23,7 @@ export const api = {
   tags: (themeId = null) => req('/tags' + (themeId ? `?theme_id=${themeId}` : '')),
   mediaUrl: (messageId, index) => `${BASE}/media/${messageId}/${index}`,
   posterUrl: (messageId, index) => `${BASE}/media/poster/${messageId}/${index}`,
+  posterHealth: () => req('/media/poster/health'),
   thumbUrl: (thumbPath) => (thumbPath ? `${BASE}/media/thumb/${thumbPath}` : null),
 
   me: () => req('/auth/me'),

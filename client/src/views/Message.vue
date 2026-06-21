@@ -34,12 +34,20 @@
             class="relative mx-auto aspect-[16/9] max-h-[48vh] min-h-[240px] w-full max-w-5xl overflow-hidden bg-black dark:bg-neutral-800"
           >
             <img
+              v-if="!heroPosterFailed"
               :src="posterUrl(heroVideo.index)"
               loading="eager"
               class="h-full w-full object-cover opacity-55"
+              @error="heroPosterFailed = true"
             />
             <div class="absolute inset-0 flex items-center justify-center">
               <div class="flex h-14 w-14 items-center justify-center rounded-full bg-black/45 text-2xl text-white">▶</div>
+            </div>
+            <div
+              v-if="heroPosterFailed"
+              class="absolute inset-x-4 bottom-4 rounded-lg bg-black/60 px-3 py-2 text-center text-sm text-white"
+            >
+              视频封面生成失败
             </div>
             <div class="absolute inset-0 bg-gradient-to-t from-white via-white/78 to-white/20 dark:from-neutral-950 dark:via-neutral-950/74 dark:to-neutral-950/15"></div>
           </div>
@@ -138,6 +146,7 @@ const router = useRouter();
 
 const msg = ref(null);
 const loading = ref(true);
+const heroPosterFailed = ref(false);
 let lightbox = null;
 
 const allMedia = computed(() => (msg.value ? msg.value.media : []));
@@ -231,6 +240,7 @@ function destroyLightbox() {
 
 async function load() {
   loading.value = true;
+  heroPosterFailed.value = false;
   destroyLightbox();
   try {
     msg.value = await api.message(Number(route.params.id));

@@ -24,12 +24,20 @@
         />
         <div v-else-if="theme.cover_video_message_id != null && theme.cover_video_index != null" class="absolute inset-0">
           <img
+            v-if="!posterFailedIds.has(theme.id)"
             :src="api.posterUrl(theme.cover_video_message_id, theme.cover_video_index)"
             :alt="theme.name"
             class="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
+            @error="markPosterFailed(theme.id)"
           />
           <div class="absolute inset-0 flex items-center justify-center">
             <div class="flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-xl text-white">▶</div>
+          </div>
+          <div
+            v-if="posterFailedIds.has(theme.id)"
+            class="absolute inset-x-3 bottom-3 rounded-lg bg-black/60 px-2 py-1 text-center text-xs text-white"
+          >
+            视频封面生成失败
           </div>
         </div>
         <div
@@ -54,10 +62,17 @@ import { api } from '../api';
 
 const themes = ref([]);
 const loading = ref(true);
+const posterFailedIds = ref(new Set());
+
+function markPosterFailed(id) {
+  if (posterFailedIds.value.has(id)) return;
+  posterFailedIds.value = new Set([...posterFailedIds.value, id]);
+}
 
 onMounted(async () => {
   try {
     themes.value = await api.themes();
+    posterFailedIds.value = new Set();
   } catch (error) {
     console.error(error);
   } finally {

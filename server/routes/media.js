@@ -6,7 +6,7 @@ const fs = require('fs');
 const { db } = require('../db');
 const { THUMBS_DIR } = require('../config');
 const { getAdapter } = require('../services/scanner');
-const { getSharp, generateVideoThumbFromFile, generateVideoThumbFromStream } = require('../services/thumbnail');
+const { getSharp, getFfmpegStatus, generateVideoThumbFromFile, generateVideoThumbFromStream } = require('../services/thumbnail');
 const { safeJoin, mimeFor, isImage, getExt } = require('../util');
 
 const router = express.Router();
@@ -16,6 +16,11 @@ router.get('/thumb/:sid/:name', (req, res) => {
   if (!file.startsWith(THUMBS_DIR)) return res.status(400).end();
   if (!fs.existsSync(file)) return res.status(404).end();
   res.type('image/webp').sendFile(file);
+});
+
+router.get('/poster/health', (req, res) => {
+  const status = getFfmpegStatus();
+  res.json(status);
 });
 
 async function writePosterFromJpeg(tempPath, res) {
@@ -150,6 +155,14 @@ router.get('/poster/:messageId/:index', async (req, res) => {
     }
     await writePosterFromJpeg(tempFile, res);
   } catch (error) {
+    console.error('[poster] failed', {
+      messageId: info.msg.id,
+      index: Number(req.params.index),
+      sourceId: info.source.id,
+      sourceType: info.source.type,
+      fileRel: resolved.rel || info.fileRel,
+      error: error.message
+    });
     if (!res.headersSent) res.status(500).json({ error: error.message });
   } finally {
     await fs.promises.unlink(tempFile).catch(() => {});

@@ -56,7 +56,7 @@ have_systemd() { [[ -d /run/systemd/system ]] && command -v systemctl >/dev/null
 install_packages() {
   detect_pm
   [[ "$PM" == "unknown" ]] && { warn "无法识别包管理器，跳过系统依赖安装(请自行确保 git/node 已安装)"; return 0; }
-  local pkgs=(git curl ca-certificates)
+  local pkgs=(git curl ca-certificates ffmpeg)
   # Node 安装交给 NodeSource，这里只装编译 sharp 可能需要的(部分系统 sharp 需构建工具)
   case "$PM" in
     apt) pkgs+=(build-essential python3);;
