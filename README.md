@@ -232,51 +232,22 @@ docker build -t lewdland .
 
 ### 2. 启动容器
 
-最简单的启动方式：
+启动方式：
 
 ```bash
-docker run -d \
-  --name lewdland \
-  -p 3000:3000 \
-  -e SESSION_SECRET="your-random-secret" \
-  -e ADMIN_DEFAULT_PASSWORD="your-password" \
-  -v /your/lewdland-data:/data \
-  lewdland
-```
-
-如果宿主机路径里有空格，记得整体加引号：
-
-```bash
-docker run -d \
-  --name lewdland \
-  -p 52022:3000 \
-  -e SESSION_SECRET="your-random-secret" \
-  -e ADMIN_DEFAULT_PASSWORD="your-password" \
-  -v "/vol1/1000/AAA/ 福利局:/data" \
-  lewdland
-```
-
-### 3. 挂载本地媒体目录
-
-如果你要添加本地目录数据源，而不是纯 WebDAV，需要把宿主机媒体目录也挂进容器。
-
-例如：
-
-```bash
-docker run -d \
-  --name lewdland \
-  -p 3000:3000 \
-  -e SESSION_SECRET="your-random-secret" \
-  -e ADMIN_DEFAULT_PASSWORD="your-password" \
-  -v /your/lewdland-data:/data \
-  -v /your/media:/media:ro \
+docker run -d 
+  --name lewdland 
+  -p 3000:3000 
+  -e SESSION_SECRET="your-random-secret" 
+  -e ADMIN_DEFAULT_PASSWORD="your-password" 
+  -v /your/lewdland-data:/data 
   lewdland
 ```
 
 这时在管理后台里填写本地数据源路径时，要填容器内路径：
 
 ```text
-/media
+/data/...
 ```
 
 不要填宿主机路径。
@@ -312,9 +283,7 @@ http://你的IP:端口/admin
 
 例如：
 
-- AV解说
-- Cos写真
-- 收藏视频
+- 收藏资源
 
 ### 4. 添加数据源
 
