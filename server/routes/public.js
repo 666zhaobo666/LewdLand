@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const express = require('express');
 const { db } = require('../db');
@@ -47,9 +47,13 @@ function buildDisplayMedia(msg) {
   const media = buildMediaList(msg);
   const firstMainImage = media.find((item) => item.slot === 'main' && item.kind === 'image');
   const firstCommentImage = media.find((item) => item.slot === 'comment' && item.kind === 'image');
+  const firstVideo = media.find((item) => item.kind === 'video');
   return {
     media,
-    cover_index: firstMainImage ? firstMainImage.index : (firstCommentImage ? firstCommentImage.index : null)
+    cover_index: firstMainImage ? firstMainImage.index : (firstCommentImage ? firstCommentImage.index : null),
+    // When no image is available, fall back to the first video so the client
+    // can render a video preview as the cover.
+    cover_video_index: firstVideo ? firstVideo.index : null
   };
 }
 
@@ -70,16 +74,51 @@ router.get('/themes/:id/messages', (req, res) => {
   }
 
   const total = db.prepare(`SELECT COUNT(*) c FROM messages WHERE ${where}`).get(...params).c;
-  const rows = db.prepare(`SELECT id,theme_id,source_chat,message_id,title,description,tags_text,
-    publish_date,thumb_path,media_count,
+  const rows = db.prepare(`SELECT id,theme_id,source_id,source_chat,message_id,title,description,tags_text,
+    publish_date,thumb_path,media_count,main_files,comment_files,
     json_array_length(main_files) AS main_count,
     json_array_length(comment_files) AS comment_count
     FROM messages WHERE ${where}
     ORDER BY COALESCE(publish_date,'') DESC, id DESC
     LIMIT ? OFFSET ?`).all(...params, limit, offset);
 
+  // Decorate each row with cover_video_index when there's no image and the
+  // scanner never produced a thumb (e.g. WebDAV-only video resources).
+  for (const row of rows) {
+    row.cover_video_index = null;
+    if (!row.thumb_path) {
+      const main = safeParseArray(row.main_files);
+      const comments = safeParseArray(row.comment_files);
+      const firstVideoName = main.find((f) => mediaKind(f) === 'video') || comments.find((f) => mediaKind(f) === 'video');
+      if (firstVideoName) {
+        const mainLen = main.length;
+        let idx = 0;
+        for (const f of main) {
+          if (f === firstVideoName) { row.cover_video_index = idx; break; }
+          idx++;
+        }
+        if (row.cover_video_index == null) {
+          for (const f of comments) {
+            if (f === firstVideoName) { row.cover_video_index = idx; break; }
+            idx++;
+          }
+        }
+      }
+    }
+  }
+
   res.json({ page, limit, total, items: rows });
 });
+
+function safeParseArray(value) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
 
 router.get('/messages/:id', (req, res) => {
   const msg = db.prepare('SELECT * FROM messages WHERE id=?').get(Number(req.params.id));
@@ -99,6 +138,7 @@ router.get('/messages/:id', (req, res) => {
     thumb_path: msg.thumb_path,
     media_count: msg.media_count,
     cover_index: display.cover_index,
+    cover_video_index: display.cover_video_index,
     media: display.media
   });
 });

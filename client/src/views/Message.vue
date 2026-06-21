@@ -30,6 +30,21 @@
             <div class="absolute inset-0 bg-gradient-to-t from-white via-white/78 to-white/20 dark:from-neutral-950 dark:via-neutral-950/74 dark:to-neutral-950/15"></div>
           </div>
           <div
+            v-else-if="heroVideo"
+            class="relative mx-auto aspect-[16/9] max-h-[48vh] min-h-[240px] w-full max-w-5xl overflow-hidden bg-black dark:bg-neutral-800"
+          >
+            <video
+              :src="mediaUrl(heroVideo.index)"
+              autoplay
+              muted
+              loop
+              playsinline
+              preload="metadata"
+              class="h-full w-full object-cover opacity-55"
+            ></video>
+            <div class="absolute inset-0 bg-gradient-to-t from-white via-white/78 to-white/20 dark:from-neutral-950 dark:via-neutral-950/74 dark:to-neutral-950/15"></div>
+          </div>
+          <div
             v-else
             class="mx-auto flex aspect-[16/9] max-h-[48vh] min-h-[240px] w-full max-w-5xl items-center justify-center bg-neutral-200 text-sm text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
           >
@@ -137,6 +152,11 @@ const heroImage = computed(() => {
   if (mainImage) return mainImage;
   if (msg.value.cover_index == null) return null;
   return allMedia.value.find((item) => item.index === msg.value.cover_index && item.kind === 'image') || null;
+});
+
+const heroVideo = computed(() => {
+  if (!msg.value) return null;
+  return allMedia.value.find((item) => item.index === msg.value.cover_video_index && item.kind === 'video') || null;
 });
 
 const backLink = computed(() => {

@@ -61,6 +61,16 @@
               loading="lazy"
               class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
             />
+            <video
+              v-else-if="item.cover_video_index != null"
+              :src="api.mediaUrl(item.id, item.cover_video_index)"
+              autoplay
+              muted
+              loop
+              playsinline
+              preload="metadata"
+              class="h-full w-full object-cover"
+            ></video>
             <div
               v-else
               class="flex h-full w-full items-center justify-center text-sm text-neutral-400 dark:text-neutral-500"
