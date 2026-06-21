@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div>
     <div class="mb-4 flex items-center gap-3">
       <button
@@ -18,14 +18,14 @@
       <section class="relative mb-8 overflow-visible rounded-[28px]">
         <div class="overflow-hidden rounded-[28px] bg-neutral-100 dark:bg-neutral-900">
           <div
-            v-if="heroImages.length"
+            v-if="heroImage"
             class="relative mx-auto aspect-[16/9] max-h-[48vh] min-h-[240px] w-full max-w-5xl bg-neutral-200 dark:bg-neutral-800"
           >
             <img
-              :src="mediaUrl(heroImages[0].index)"
+              :src="mediaUrl(heroImage.index)"
               loading="eager"
               class="h-full w-full object-cover opacity-55"
-              @click="openPreview(heroImages[0].index)"
+              @click="openPreview(heroImage.index)"
             />
             <div class="absolute inset-0 bg-gradient-to-t from-white via-white/78 to-white/20 dark:from-neutral-950 dark:via-neutral-950/74 dark:to-neutral-950/15"></div>
           </div>
@@ -55,13 +55,22 @@
         </div>
       </section>
 
-      <div v-if="mainVideos.length" class="mb-6 space-y-5">
+      <div v-if="mainMedia.length" class="mb-6 space-y-5">
         <div
-          v-for="m in mainVideos"
-          :key="`main-video-${m.index}`"
-          class="mx-auto w-full max-w-4xl overflow-hidden rounded-2xl bg-black shadow-sm"
+          v-for="m in mainMedia"
+          :key="`main-media-${m.index}`"
+          class="mx-auto w-full max-w-4xl overflow-hidden rounded-2xl shadow-sm"
+          :class="m.kind === 'image' ? 'bg-neutral-100 dark:bg-neutral-900' : 'bg-black'"
         >
-          <div class="aspect-video w-full">
+          <div v-if="m.kind === 'image'" class="flex max-h-[72vh] min-h-[240px] items-center justify-center">
+            <img
+              :src="mediaUrl(m.index)"
+              loading="lazy"
+              class="max-h-[72vh] w-full cursor-zoom-in object-contain"
+              @click="openPreview(m.index)"
+            />
+          </div>
+          <div v-else-if="m.kind === 'video'" class="aspect-video w-full">
             <video
               :src="mediaUrl(m.index)"
               controls
@@ -73,13 +82,14 @@
         </div>
       </div>
 
-      <div v-if="commentImages.length" class="space-y-5">
+      <div v-if="commentMedia.length" class="space-y-5">
         <div
-          v-for="m in commentImages"
-          :key="`comment-image-${m.index}`"
-          class="mx-auto w-full max-w-4xl overflow-hidden rounded-2xl bg-neutral-100 shadow-sm dark:bg-neutral-900"
+          v-for="m in commentMedia"
+          :key="`comment-media-${m.index}`"
+          class="mx-auto w-full max-w-4xl overflow-hidden rounded-2xl shadow-sm"
+          :class="m.kind === 'image' ? 'bg-neutral-100 dark:bg-neutral-900' : 'bg-black'"
         >
-          <div class="flex max-h-[72vh] min-h-[240px] items-center justify-center">
+          <div v-if="m.kind === 'image'" class="flex max-h-[72vh] min-h-[240px] items-center justify-center">
             <img
               :src="mediaUrl(m.index)"
               loading="lazy"
@@ -87,16 +97,7 @@
               @click="openPreview(m.index)"
             />
           </div>
-        </div>
-      </div>
-
-      <div v-if="commentVideos.length" class="mt-6 space-y-5">
-        <div
-          v-for="m in commentVideos"
-          :key="`comment-video-${m.index}`"
-          class="mx-auto w-full max-w-4xl overflow-hidden rounded-2xl bg-black shadow-sm"
-        >
-          <div class="aspect-video w-full">
+          <div v-else-if="m.kind === 'video'" class="aspect-video w-full">
             <video
               :src="mediaUrl(m.index)"
               controls
@@ -126,18 +127,16 @@ const loading = ref(true);
 let lightbox = null;
 
 const allMedia = computed(() => (msg.value ? msg.value.media : []));
-const mainImages = computed(() => allMedia.value.filter((item) => item.slot === 'main' && item.kind === 'image'));
-const mainVideos = computed(() => allMedia.value.filter((item) => item.slot === 'main' && item.kind === 'video'));
-const commentImages = computed(() => allMedia.value.filter((item) => item.slot === 'comment' && item.kind === 'image'));
-const commentVideos = computed(() => allMedia.value.filter((item) => item.slot === 'comment' && item.kind === 'video'));
+const mainMedia = computed(() => allMedia.value.filter((item) => item.slot === 'main'));
+const commentMedia = computed(() => allMedia.value.filter((item) => item.slot === 'comment'));
 const imageMedia = computed(() => allMedia.value.filter((item) => item.kind === 'image'));
 
-const heroImages = computed(() => {
-  if (!msg.value) return [];
-  if (mainImages.value.length) return [mainImages.value[0]];
-  if (msg.value.cover_index == null) return [];
-  const fallback = allMedia.value.find((item) => item.index === msg.value.cover_index && item.kind === 'image');
-  return fallback ? [fallback] : [];
+const heroImage = computed(() => {
+  if (!msg.value) return null;
+  const mainImage = mainMedia.value.find((item) => item.kind === 'image');
+  if (mainImage) return mainImage;
+  if (msg.value.cover_index == null) return null;
+  return allMedia.value.find((item) => item.index === msg.value.cover_index && item.kind === 'image') || null;
 });
 
 const backLink = computed(() => {
