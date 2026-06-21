@@ -36,18 +36,19 @@ async function writeImageThumb(inputBuffer, dest) {
 }
 
 // Pull a single frame out of a video file on disk and write it to dest (JPEG).
-function generateVideoThumbFromFile(localPath, dest) {
-  return runFfmpegFrameExtract(['-y', '-ss', '00:00:01', '-i', localPath, '-frames:v', '1', '-vf', 'scale=640:-2', '-q:v', '4', dest]);
+function generateVideoThumbFromFile(localPath, dest, seconds) {
+  const seek = Number.isFinite(seconds) && seconds >= 0 ? seconds : 1;
+  const seekArg = seek.toFixed(3);
+  return runFfmpegFrameExtract(['-y', '-ss', seekArg, '-i', localPath, '-frames:v', '1', '-vf', 'scale=640:-2', '-q:v', '4', dest]);
 }
 
 // Pull a single frame out of a video supplied as a Node readable stream and
 // write it to dest (JPEG). Streams from WebDAV/remote sources can be passed in
 // here without needing a local file.
-function generateVideoThumbFromStream(readable, dest) {
-  // For streamed input we don't seek to a fixed timestamp because remote
-  // streams may not support byte-level seeking and some containers put the
-  // moov atom near the end. Just grab the first decoded frame.
-  return runFfmpegFrameExtract(['-y', '-i', 'pipe:0', '-frames:v', '1', '-vf', 'scale=640:-2', '-q:v', '4', dest], readable);
+function generateVideoThumbFromStream(readable, dest, seconds) {
+  const seek = Number.isFinite(seconds) && seconds >= 0 ? seconds : 1;
+  const seekArg = seek.toFixed(3);
+  return runFfmpegFrameExtract(['-y', '-i', 'pipe:0', '-ss', seekArg, '-frames:v', '1', '-vf', 'scale=640:-2', '-q:v', '4', dest], readable);
 }
 
 function runFfmpegFrameExtract(args, stdinStream, opts) {
@@ -147,9 +148,9 @@ async function ensureThumb(adapter, sourceId, relDir, mainFiles, commentFiles, f
       const tempJpeg = path.join(THUMBS_DIR, subDir, `${sha1(`${relDir}:video`)}.jpg`);
       try {
         if (getter.kind === 'file') {
-          await generateVideoThumbFromFile(getter.localPath, tempJpeg);
+          await generateVideoThumbFromFile(getter.localPath, tempJpeg, 1);
         } else {
-          await generateVideoThumbFromStream(getter.stream, tempJpeg);
+          await generateVideoThumbFromStream(getter.stream, tempJpeg, 1);
         }
         const inputBuffer = await fs.promises.readFile(tempJpeg);
         await writeImageThumb(inputBuffer, dest);

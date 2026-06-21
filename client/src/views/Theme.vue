@@ -63,10 +63,17 @@
             />
             <div
               v-else-if="item.cover_video_index != null"
-              class="flex h-full w-full flex-col items-center justify-center bg-neutral-900 text-neutral-200"
+              class="relative h-full w-full overflow-hidden bg-neutral-900"
             >
-              <div class="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-xl">▶</div>
-              <div class="text-sm">视频资源</div>
+              <img
+                :src="api.posterUrl(item.id, item.cover_video_index)"
+                :alt="item.title || '视频封面'"
+                loading="lazy"
+                class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+              />
+              <div class="absolute inset-0 flex items-center justify-center">
+                <div class="flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-xl text-white">▶</div>
+              </div>
             </div>
             <div
               v-else

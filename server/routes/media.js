@@ -6,15 +6,10 @@ const fs = require('fs');
 const { db } = require('../db');
 const { THUMBS_DIR } = require('../config');
 const { getAdapter } = require('../services/scanner');
+const { getSharp, generateVideoThumbFromFile, generateVideoThumbFromStream } = require('../services/thumbnail');
 const { safeJoin, mimeFor, isImage, getExt } = require('../util');
 
 const router = express.Router();
-
-let sharpLoader = null;
-async function getSharp() {
-  if (!sharpLoader) sharpLoader = import('sharp').then((mod) => mod.default);
-  return sharpLoader;
-}
 
 router.get('/thumb/:sid/:name', (req, res) => {
   const file = path.join(THUMBS_DIR, String(req.params.sid), path.basename(req.params.name));
@@ -22,6 +17,19 @@ router.get('/thumb/:sid/:name', (req, res) => {
   if (!fs.existsSync(file)) return res.status(404).end();
   res.type('image/webp').sendFile(file);
 });
+
+async function writePosterFromJpeg(tempPath, res) {
+  const sharp = await getSharp();
+  const buffer = await sharp(tempPath)
+    .rotate()
+    .resize({ width: 640, height: 640, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 78 })
+    .toBuffer();
+  res.type('image/webp');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.setHeader('Content-Length', buffer.length);
+  res.send(buffer);
+}
 
 function resolveMessageMedia(messageId, index) {
   const msg = db.prepare('SELECT * FROM messages WHERE id=?').get(Number(messageId));
@@ -191,6 +199,32 @@ router.get('/:messageId/:index', async (req, res) => {
     }
   } catch (error) {
     if (!res.headersSent) res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/poster/:messageId/:index', async (req, res) => {
+  const info = resolveMessageMedia(req.params.messageId, req.params.index);
+  if (!info || info.kind !== 'video') return res.status(404).json({ error: 'not found' });
+
+  const resolved = await resolveExistingMediaPath(info);
+  if (!resolved) return res.status(404).json({ error: 'not found' });
+
+  const tempDir = path.join(THUMBS_DIR, '_posters');
+  const tempFile = path.join(tempDir, `${info.msg.id}-${req.params.index}-${Date.now()}.jpg`);
+  await fs.promises.mkdir(tempDir, { recursive: true });
+
+  try {
+    if (info.adapter.kind === 'local') {
+      await generateVideoThumbFromFile(resolved.localPath, tempFile, 1);
+    } else {
+      const stream = info.adapter.createReadStream(resolved.rel);
+      await generateVideoThumbFromStream(stream, tempFile, 1);
+    }
+    await writePosterFromJpeg(tempFile, res);
+  } catch (error) {
+    if (!res.headersSent) res.status(500).json({ error: error.message });
+  } finally {
+    await fs.promises.unlink(tempFile).catch(() => {});
   }
 });
 

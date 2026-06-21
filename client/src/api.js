@@ -22,6 +22,7 @@ export const api = {
   message: (id) => req(`/messages/${id}`),
   tags: (themeId = null) => req('/tags' + (themeId ? `?theme_id=${themeId}` : '')),
   mediaUrl: (messageId, index) => `${BASE}/media/${messageId}/${index}`,
+  posterUrl: (messageId, index) => `${BASE}/media/poster/${messageId}/${index}`,
   thumbUrl: (thumbPath) => (thumbPath ? `${BASE}/media/thumb/${thumbPath}` : null),
 
   me: () => req('/auth/me'),
